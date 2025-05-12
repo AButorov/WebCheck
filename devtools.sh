@@ -12,14 +12,22 @@ NC='\033[0m' # No Color
 # Функция для вывода меню
 show_menu() {
     echo -e "${BLUE}=== Web Check Development Tools ===${NC}"
-    echo "1) Запустить режим разработки (dev server)"
-    echo "2) Создать отладочную сборку (debug)"
-    echo "3) Создать CSP-совместимую MV3 сборку"
-    echo "4) Создать production сборку"
-    echo "5) Очистить временные файлы"
-    echo "6) Создать резервную копию"
-    echo "7) Запустить диагностику"
+    echo "1) Установить/обновить зависимости"
+    echo "2) Запустить режим разработки (dev server)"
+    echo "3) Создать отладочную сборку (debug)"
+    echo "4) Создать CSP-совместимую MV3 сборку"
+    echo "5) Создать production сборку"
+    echo "6) Очистить временные файлы"
+    echo "7) Создать резервную копию"
+    echo "8) Запустить диагностику"
     echo "0) Выход"
+}
+
+# Функция для установки зависимостей
+run_install() {
+    echo -e "${YELLOW}Установка/обновление зависимостей...${NC}"
+    chmod +x install.sh
+    ./install.sh
 }
 
 # Функция для запуска режима разработки
@@ -73,16 +81,17 @@ run_diagnose() {
 # Основной цикл
 while true; do
     show_menu
-    read -p "Выберите действие (0-7): " choice
+    read -p "Выберите действие (0-8): " choice
     
     case $choice in
-        1) run_dev ;;
-        2) run_debug ;;
-        3) run_mv3_build ;;
-        4) run_production ;;
-        5) run_clean ;;
-        6) run_backup ;;
-        7) run_diagnose ;;
+        1) run_install ;;
+        2) run_dev ;;
+        3) run_debug ;;
+        4) run_mv3_build ;;
+        5) run_production ;;
+        6) run_clean ;;
+        7) run_backup ;;
+        8) run_diagnose ;;
         0) echo -e "${GREEN}Выход${NC}"; break ;;
         *) echo -e "${RED}Неверный выбор, попробуйте снова${NC}" ;;
     esac

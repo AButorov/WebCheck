@@ -9,6 +9,15 @@ import manifest from './src/manifest'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
+// Проверка наличия Terser
+let hasTerser = true
+try {
+  require.resolve('terser')
+} catch (e) {
+  hasTerser = false
+  console.warn('Terser не найден. Будет использована минификация esbuild.')
+}
+
 // https://vitejs.dev/config/
 export default defineConfig({
   resolve: {
@@ -71,16 +80,12 @@ export default defineConfig({
       },
     },
     sourcemap: false, // Отключаем для продакшена
-    minify: 'terser', // Используем terser для максимальной оптимизации
-    terserOptions: {
-      compress: {
-        drop_console: false, // Оставляем консоль-логи для отладки
-        drop_debugger: true,
-      },
-    },
+    minify: hasTerser ? 'terser' : 'esbuild', // Используем terser, если доступен, иначе esbuild
     // Настройки CSP совместимости
     cssCodeSplit: false,
     assetsInlineLimit: 0,
+    // Отключаем использование @charset в css
+    cssTarget: ['chrome89', 'edge89', 'firefox89', 'safari15']
   },
   define: {
     // Настройки для Vue 3

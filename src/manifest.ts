@@ -1,19 +1,20 @@
 import { defineManifest } from '@crxjs/vite-plugin'
 import packageJson from '../package.json'
 
-const { version } = packageJson
+const { version, name, description } = packageJson
 
 // Convert from Semver (example: 0.1.0-beta6)
-const [major, minor, patch] = version
+const [major, minor, patch, label = '0'] = version
   .replace(/[^\d.-]/g, '')
   .split(/[.-]/)
-  .map(Number)
 
-export default defineManifest(async () => ({
+export default defineManifest(async (env) => ({
   manifest_version: 3,
-  name: 'Web Check',
-  description: 'Track changes on web pages with minimal effort',
-  version: `${major}.${minor}.${patch}`,
+  name: env.mode === 'staging' ? `[INTERNAL] ${name}` : 'Web Check',
+  description: description || 'Track changes on web pages with minimal effort',
+  // up to four numbers separated by dots
+  version: `${major}.${minor}.${patch}.${label}`,
+  // semver is OK in "version_name"
   version_name: version,
   icons: {
     '16': 'icons/icon-16.png',
@@ -41,7 +42,7 @@ export default defineManifest(async () => ({
       js: ['src/content-script/index.ts'],
     },
   ],
-  // Обновлена CSP без использования unsafe-eval
+  // CSP для MV3 - максимально строгая, без unsafe-eval
   content_security_policy: {
     extension_pages: "script-src 'self'; object-src 'self'; style-src 'self' 'unsafe-inline';"
   },
