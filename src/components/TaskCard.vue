@@ -1,17 +1,21 @@
 <template>
   <div 
     :class="[
-      'relative rounded-card shadow-sm p-4 mb-4',
-      statusClasses[task.status]
+      'relative rounded-lg shadow-sm p-4 mb-4 border',
+      {
+        'bg-amber-50 border-amber-200': task.status === 'changed',
+        'bg-green-50 border-green-200': task.status === 'unchanged',
+        'bg-gray-50 border-gray-200': task.status === 'paused'
+      }
     ]"
   >
     <!-- Заголовок и статус -->
     <div class="flex justify-between items-start mb-2">
       <div class="flex-1">
-        <h3 class="text-card-title font-bold truncate pr-8">{{ task.title }}</h3>
-        <div class="flex items-center mt-1 text-main">
+        <h3 class="text-lg font-bold truncate pr-8">{{ task.title }}</h3>
+        <div class="flex items-center mt-1 text-sm">
           <img 
-            :src="task.faviconUrl || 'src/assets/icons/globe.svg'" 
+            :src="task.faviconUrl || '/icons/icon-16.png'" 
             alt="Site icon" 
             class="w-4 h-4 mr-2"
           />
@@ -21,7 +25,7 @@
       
       <!-- Кнопка удаления -->
       <button 
-        class="absolute top-3 right-3 text-red-action hover:bg-gray-100 rounded-full p-1"
+        class="absolute top-3 right-3 text-red-500 hover:bg-gray-100 rounded-full p-1"
         @click="$emit('remove', task.id)"
         :title="t('popup.taskCard.actions.delete')"
       >
@@ -38,7 +42,11 @@
         <button 
           :class="[
             'w-6 h-6 border-2 rounded flex items-center justify-center mr-2',
-            statusCheckboxClasses[task.status]
+            {
+              'border-amber-500 text-amber-500': task.status === 'changed',
+              'border-green-500 text-green-500': task.status === 'unchanged',
+              'border-gray-400': task.status === 'paused'
+            }
           ]"
           @click="toggleStatus"
           :title="checkboxTitle"
@@ -48,7 +56,7 @@
           </svg>
         </button>
         
-        <span :class="['text-main', { 'text-gray-500': task.status === 'paused' }]">
+        <span :class="['text-sm', { 'text-gray-500': task.status === 'paused' }]">
           {{ t(`popup.taskCard.statuses.${task.status}`) }}
         </span>
       </div>
@@ -56,7 +64,7 @@
       <!-- Селектор интервала -->
       <select 
         v-model="selectedInterval" 
-        class="text-secondary bg-white border border-gray-300 rounded px-2 py-1"
+        class="text-sm bg-white border border-gray-300 rounded px-2 py-1"
         :disabled="task.status === 'paused'"
       >
         <option value="15m">15м</option>
@@ -74,10 +82,14 @@
           <div 
             class="h-2 rounded-full"
             :style="{ width: `${remainingTimePercent}%` }"
-            :class="progressBarClasses[task.status]"
+            :class="{
+              'bg-amber-500': task.status === 'changed',
+              'bg-green-500': task.status === 'unchanged',
+              'bg-gray-400': task.status === 'paused'
+            }"
           ></div>
         </div>
-        <div class="text-secondary text-gray-500 mt-1" v-if="task.status !== 'paused'">
+        <div class="text-xs text-gray-500 mt-1" v-if="task.status !== 'paused'">
           {{ remainingTimeText }}
         </div>
       </div>
@@ -85,7 +97,7 @@
       <!-- Кнопка просмотра изменений -->
       <button 
         v-if="task.status === 'changed'"
-        class="bg-purple-action text-white rounded p-1"
+        class="bg-purple-600 text-white rounded p-1"
         @click="$emit('view', task.id)"
         :title="t('popup.taskCard.actions.view')"
       >
@@ -145,24 +157,6 @@ const remainingTimeText = computed(() => {
   }
   return formatRemainingTimeText(props.task.lastCheckedAt, props.task.interval)
 })
-
-const statusClasses = {
-  changed: 'bg-amber-light border border-amber-border',
-  unchanged: 'bg-green-light border border-green-border',
-  paused: 'bg-gray-light border border-gray-border'
-}
-
-const statusCheckboxClasses = {
-  changed: 'border-amber-status text-amber-status',
-  unchanged: 'border-green-status text-green-status',
-  paused: 'border-gray-status'
-}
-
-const progressBarClasses = {
-  changed: 'bg-amber-status',
-  unchanged: 'bg-green-status',
-  paused: 'bg-gray-status'
-}
 
 const checkboxTitle = computed(() => {
   if (props.task.status === 'paused') {

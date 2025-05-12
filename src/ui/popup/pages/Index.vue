@@ -37,31 +37,7 @@
     </div>
     
     <div v-else class="task-list">
-      <!-- Отладочная информация о задачах -->
-      <div class="my-4 p-2 bg-gray-100 rounded-md text-xs">
-        <p>Найдено задач: {{ tasksStore.tasks.length }}</p>
-      </div>
-      
       <!-- Список задач -->
-      <div v-for="task in tasksStore.tasks" :key="task.id" class="mb-4 p-3 border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-shadow duration-200">
-        <div class="font-medium">{{ task.title }}</div>
-        <div class="text-sm text-gray-500 mt-1">{{ task.url }}</div>
-        <div class="flex justify-between items-center mt-2">
-          <span class="text-xs" :class="{
-            'text-amber-500': task.status === 'changed',
-            'text-green-500': task.status === 'unchanged',
-            'text-gray-500': task.status === 'paused',
-          }">
-            {{ task.status === 'changed' ? 'Есть изменения' : 
-               task.status === 'unchanged' ? 'Без изменений' : 
-               'Приостановлено' }}
-          </span>
-          <span class="text-xs bg-gray-100 px-2 py-1 rounded">{{ task.interval }}</span>
-        </div>
-      </div>
-      
-      <!-- Полные карточки задач (закомментированы для отладки) -->
-      <!-- 
       <TaskCard 
         v-for="task in tasksStore.tasks" 
         :key="task.id" 
@@ -71,7 +47,6 @@
         @view="viewTaskChanges"
         @remove="removeTask"
       />
-      -->
     </div>
     
     <!-- Футер с информацией о количестве задач -->

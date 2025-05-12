@@ -1,5 +1,5 @@
 <template>
-  <div class="w-96 bg-white">
+  <div class="bg-white w-full">
     <!-- Шапка экрана просмотра изменений -->
     <header class="flex items-center p-4 border-b">
       <button 
@@ -12,14 +12,14 @@
       </button>
       
       <div class="flex-1 mx-2 truncate">
-        <div class="text-main font-bold truncate">{{ task?.title }}</div>
-        <div class="text-secondary text-gray-500 truncate">{{ displayUrl }}</div>
+        <div class="text-lg font-bold truncate">{{ task?.title }}</div>
+        <div class="text-sm text-gray-500 truncate">{{ displayUrl }}</div>
       </div>
       
       <a 
         :href="task?.url" 
         target="_blank"
-        class="text-primary bg-blue-50 px-2 py-1 rounded text-sm hover:bg-blue-100"
+        class="text-blue-600 bg-blue-50 px-2 py-1 rounded text-sm hover:bg-blue-100 whitespace-nowrap"
       >
         Перейти на страницу
       </a>
@@ -27,7 +27,7 @@
     
     <!-- Панель сравнения изменений -->
     <div class="p-4">
-      <div class="mb-3 flex justify-between text-secondary text-gray-500">
+      <div class="mb-3 flex justify-between text-sm text-gray-500">
         <div>
           <div>Исходный вид:</div>
           <div>{{ formatDate(task?.createdAt || 0) }}</div>
@@ -43,7 +43,7 @@
         <!-- Левая панель (исходный вид) -->
         <div class="w-1/2 pr-1 border border-gray-200 rounded-l overflow-hidden">
           <div 
-            class="p-2 max-h-60 overflow-auto"
+            class="p-2 max-h-60 overflow-auto text-sm"
             v-html="task?.initialHtml"
           ></div>
         </div>
@@ -51,7 +51,7 @@
         <!-- Правая панель (текущий вид) -->
         <div class="w-1/2 pl-1 border border-gray-200 rounded-r overflow-hidden">
           <div 
-            class="p-2 max-h-60 overflow-auto"
+            class="p-2 max-h-60 overflow-auto text-sm"
             v-html="task?.currentHtml"
           ></div>
         </div>
@@ -59,7 +59,7 @@
       
       <!-- Кнопка сброса изменений -->
       <button 
-        class="mt-4 w-full bg-primary text-white py-2 rounded"
+        class="mt-4 w-full bg-blue-500 text-white py-2 rounded hover:bg-blue-600 transition-colors"
         @click="resetChanges"
       >
         Сбросить изменения
