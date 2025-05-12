@@ -47,7 +47,7 @@
         
         <!-- Кнопка удаления -->
         <button 
-          :class="`text-white bg-[${COLORS.DELETE}] hover:bg-red-600 rounded-full p-1.5`"
+          class="text-white bg-[#f44336] hover:bg-red-600 rounded-full p-1.5"
           @click="emit('remove', task.id)"
           title="Удалить задачу"
         >
@@ -95,6 +95,7 @@
 
 <script>
 import { defineComponent, ref, computed } from 'vue'
+// Константы используются только в JavaScript, не в шаблонах
 import { COLORS } from '~/utils/constants'
 
 export default defineComponent({
@@ -149,18 +150,18 @@ export default defineComponent({
     const checkboxClass = computed(() => {
       switch (props.task.status) {
         case 'changed':
-          return `text-[${COLORS.CHANGED.MAIN}] border-[${COLORS.CHANGED.MAIN}]`
+          return 'text-[#ffb300] border-[#ffb300]'
         case 'unchanged':
-          return `text-[${COLORS.UNCHANGED.MAIN}] border-[${COLORS.UNCHANGED.MAIN}]`
+          return 'text-[#4caf50] border-[#4caf50]'
         case 'paused':
-          return `text-[${COLORS.PAUSED.MAIN}] border-[${COLORS.PAUSED.MAIN}]`
+          return 'text-[#9e9e9e] border-[#9e9e9e]'
       }
     })
     
     // Определение классов для кнопки просмотра в зависимости от статуса
     const viewButtonClass = computed(() => {
       if (props.task.status === 'changed') {
-        return `text-white bg-[${COLORS.VIEW_CHANGES}] hover:bg-purple-700`
+        return 'text-white bg-[#673ab7] hover:bg-purple-700'
       }
       return 'text-white bg-gray-400 cursor-not-allowed'
     })
@@ -171,11 +172,11 @@ export default defineComponent({
       
       switch (props.task.status) {
         case 'changed':
-          return `${baseClasses} bg-[${COLORS.CHANGED.BG}] border-[${COLORS.CHANGED.BORDER}]`
+          return `${baseClasses} bg-[#fff8e1] border-[#ffecb3]`
         case 'unchanged':
-          return `${baseClasses} bg-[${COLORS.UNCHANGED.BG}] border-[${COLORS.UNCHANGED.BORDER}]`
+          return `${baseClasses} bg-[#f1f8e9] border-[#dcedc8]`
         case 'paused':
-          return `${baseClasses} bg-[${COLORS.PAUSED.BG}] border-[${COLORS.PAUSED.BORDER}]`
+          return `${baseClasses} bg-[#f5f5f5] border-[#eeeeee]`
       }
     })
     
@@ -183,11 +184,11 @@ export default defineComponent({
     const progressClass = computed(() => {
       switch (props.task.status) {
         case 'changed':
-          return `bg-[${COLORS.CHANGED.MAIN}]`
+          return 'bg-[#ffb300]'
         case 'unchanged':
-          return `bg-[${COLORS.UNCHANGED.MAIN}]`
+          return 'bg-[#4caf50]'
         case 'paused':
-          return `bg-[${COLORS.PAUSED.MAIN}]`
+          return 'bg-[#9e9e9e]'
       }
     })
     
