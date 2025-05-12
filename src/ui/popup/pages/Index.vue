@@ -4,8 +4,8 @@
     <header class="flex justify-between items-center mb-6 pb-2 border-b">
       <h1 class="text-2xl font-bold">Web Check</h1>
       <button 
-        class="bg-[#3e66fb] text-white p-2 rounded-full hover:bg-[#2d52cc] transition-colors"
-        :title="t('popup.header.addTask')"
+        class="bg-blue-600 text-white p-2 rounded-full hover:bg-blue-700 transition-colors"
+        title="Добавить новую задачу"
         @click="handleAddTask"
       >
         <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" viewBox="0 0 20 20" fill="currentColor">
@@ -15,44 +15,44 @@
     </header>
     
     <!-- Индикатор загрузки -->
-    <div v-if="tasksStore.loading" class="flex justify-center items-center h-64">
-      <div class="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-[#3e66fb]"></div>
-      <span class="ml-3 text-gray-600">{{ t('popup.taskList.loading') }}</span>
+    <div v-if="loading" class="flex justify-center items-center h-64">
+      <div class="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-blue-600"></div>
+      <span class="ml-3 text-gray-600">Загрузка задач...</span>
     </div>
     
     <!-- Сообщение об ошибке -->
-    <div v-else-if="tasksStore.error" class="bg-red-50 border border-red-200 rounded-xl p-4 mt-4 text-center">
+    <div v-else-if="error" class="bg-red-50 border border-red-200 rounded-xl p-4 mt-4 text-center">
       <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 mx-auto text-red-500 mb-2" viewBox="0 0 20 20" fill="currentColor">
         <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
       </svg>
-      <p class="text-red-800 mb-2">{{ tasksStore.error }}</p>
+      <p class="text-red-800 mb-2">{{ error }}</p>
       <button 
-        class="text-[#3e66fb] hover:underline mt-2"
-        @click="tasksStore.loadTasks()"
+        class="text-blue-600 hover:underline mt-2"
+        @click="loadTasks"
       >
-        {{ t('popup.taskList.retry') }}
+        Попробовать снова
       </button>
     </div>
     
     <!-- Пустой список задач -->
-    <div v-else-if="tasksStore.tasks.length === 0" class="flex flex-col items-center justify-center h-64 text-gray-400">
+    <div v-else-if="tasks.length === 0" class="flex flex-col items-center justify-center h-64 text-gray-400">
       <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 mb-4 text-gray-300" viewBox="0 0 20 20" fill="currentColor">
         <path fill-rule="evenodd" d="M5 4a3 3 0 00-3 3v6a3 3 0 003 3h10a3 3 0 003-3V7a3 3 0 00-3-3H5zm0 2a1 1 0 00-1 1v6a1 1 0 001 1h10a1 1 0 001-1V7a1 1 0 00-1-1H5z" clip-rule="evenodd" />
       </svg>
-      <p class="text-lg mb-4">{{ t('popup.taskList.noTasks') }}</p>
+      <p class="text-lg mb-4">Нет активных задач.</p>
       <button 
-        class="bg-[#3e66fb] text-white px-4 py-2 rounded hover:bg-[#2d52cc] transition-colors"
+        class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition-colors"
         @click="handleAddTask"
       >
-        {{ t('popup.taskList.addFirst') }}
+        Добавить задачу
       </button>
     </div>
     
     <!-- Список задач -->
     <div v-else>
-      <div class="space-y-0">
+      <div class="space-y-4">
         <TaskCard 
-          v-for="task in tasksStore.tasks" 
+          v-for="task in tasks" 
           :key="task.id" 
           :task="task"
           @update:interval="updateTaskInterval"
@@ -64,85 +64,201 @@
     </div>
     
     <!-- Футер с информацией о количестве задач -->
-    <footer class="mt-4 pt-4 border-t text-center" v-if="tasksStore.tasks.length > 0">
+    <footer class="mt-4 pt-4 border-t text-center" v-if="tasks.length > 0">
       <p class="text-sm text-gray-500">
-        {{ t('popup.taskList.activeCount', { count: tasksStore.activeTaskCount, total: tasksStore.maxTasks }) }}
+        Активно {{ activeTaskCount }} из {{ maxTasks }} задач
       </p>
     </footer>
   </div>
 </template>
 
-<script setup lang="ts">
-import { onMounted } from 'vue'
-import { useI18n } from 'vue-i18n'
-import { useRouter } from 'vue-router'
-import { useTasksStore } from '~/stores/tasks'
-import { sendMessage } from 'webext-bridge/popup'
-import { TaskInterval, TaskStatus } from '~/types/task'
+<script>
+import { defineComponent, onMounted, ref, computed } from 'vue'
 import TaskCard from '~/components/TaskCard.vue'
 import browser from 'webextension-polyfill'
 
-const { t } = useI18n()
-const router = useRouter()
-const tasksStore = useTasksStore()
-
-onMounted(async () => {
-  await tasksStore.loadTasks()
-})
-
-async function handleAddTask() {
-  // Проверяем лимит задач
-  if (tasksStore.taskCount >= tasksStore.maxTasks) {
-    alert(t('popup.errors.taskLimitReached'))
-    return
-  }
+export default defineComponent({
+  name: 'IndexPage',
   
-  try {
-    // Отправить сообщение в контент-скрипт для активации селектора элементов
-    const activeTabId = await getActiveTabId()
-    if (activeTabId > 0) {
-      await sendMessage('activate-selector', null, { context: 'content-script', tabId: activeTabId })
+  components: {
+    TaskCard
+  },
+  
+  setup() {
+    const router = window.vueRouter
+    const tasks = ref([])
+    const loading = ref(true)
+    const error = ref(null)
+    const maxTasks = ref(5)
+    
+    // Вычисляемые свойства
+    const activeTaskCount = computed(() => {
+      return tasks.value.filter(task => task.status !== 'paused').length
+    })
+    
+    // Загрузка задач
+    async function loadTasks() {
+      console.log('Loading tasks...')
+      loading.value = true
+      error.value = null
       
-      // Можно добавить дополнительную обработку
-      window.close() // Закрываем попап для удобства выбора элемента
-    } else {
-      alert(t('popup.errors.noActiveTab'))
+      try {
+        // Загрузка из хранилища
+        const result = await browser.storage.local.get('tasks')
+        
+        if (result.tasks && Array.isArray(result.tasks) && result.tasks.length > 0) {
+          console.log('Tasks loaded:', result.tasks)
+          tasks.value = result.tasks
+        } else {
+          console.log('No tasks found, generating demo tasks')
+          tasks.value = generateDemoTasks()
+          await saveTasks()
+        }
+      } catch (err) {
+        console.error('Error loading tasks:', err)
+        error.value = 'Не удалось загрузить задачи: ' + (err.message || 'Неизвестная ошибка')
+        
+        // Fallback to demo data
+        tasks.value = generateDemoTasks()
+      } finally {
+        loading.value = false
+      }
     }
-  } catch (error) {
-    console.error('Ошибка при активации селектора:', error)
-    alert(t('popup.errors.selectorActivation'))
-  }
-}
-
-async function updateTaskInterval(taskId: string, interval: TaskInterval) {
-  await tasksStore.updateTaskInterval(taskId, interval)
-}
-
-async function updateTaskStatus(taskId: string, status: TaskStatus) {
-  await tasksStore.updateTaskStatus(taskId, status)
-}
-
-async function viewTaskChanges(taskId: string) {
-  router.push(`/view-changes/${taskId}`)
-}
-
-async function removeTask(taskId: string) {
-  if (confirm(t('popup.taskList.confirmDelete'))) {
-    await tasksStore.removeTask(taskId)
-  }
-}
-
-// Получить ID активной вкладки
-async function getActiveTabId(): Promise<number> {
-  try {
-    const tabs = await browser.tabs.query({ active: true, currentWindow: true })
-    if (tabs && tabs.length > 0 && tabs[0].id) {
-      return tabs[0].id
+    
+    // Сохранение задач
+    async function saveTasks() {
+      try {
+        await browser.storage.local.set({ tasks: tasks.value })
+        console.log('Tasks saved')
+      } catch (err) {
+        console.error('Error saving tasks:', err)
+        error.value = 'Не удалось сохранить задачи'
+      }
     }
-    throw new Error('Не удалось получить ID активной вкладки')
-  } catch (error) {
-    console.error('Ошибка при получении ID активной вкладки:', error)
-    return -1 // Фиктивный ID для случая ошибки
+    
+    // Демо-задачи
+    function generateDemoTasks() {
+      console.log('Generating demo tasks')
+      const now = Date.now()
+      const hourAgo = now - 60 * 60 * 1000
+      const dayAgo = now - 24 * 60 * 60 * 1000
+      
+      return [
+        {
+          id: generateId(),
+          title: 'Цена на iPhone 15 Pro',
+          url: 'https://www.apple.com/ru/iphone-15-pro/',
+          faviconUrl: 'https://www.apple.com/favicon.ico',
+          selector: '.price-point',
+          createdAt: dayAgo,
+          status: 'changed',
+          interval: '1h',
+          initialHtml: '<div class="price-point">89 990 ₽</div>',
+          currentHtml: '<div class="price-point">85 990 ₽</div>',
+          lastCheckedAt: hourAgo,
+          lastChangedAt: hourAgo,
+        },
+        {
+          id: generateId(),
+          title: 'Курс Bitcoin на Binance',
+          url: 'https://www.binance.com/ru/price/bitcoin',
+          faviconUrl: 'https://public.bnbstatic.com/static/images/common/favicon.ico',
+          selector: '.price-value',
+          createdAt: dayAgo,
+          status: 'unchanged',
+          interval: '15m',
+          initialHtml: '<div class="price-value">$60,245.32</div>',
+          currentHtml: '<div class="price-value">$60,245.32</div>',
+          lastCheckedAt: hourAgo - 15 * 60 * 1000,
+          lastChangedAt: null,
+        },
+        {
+          id: generateId(),
+          title: 'Наличие PS5 в DNS',
+          url: 'https://www.dns-shop.ru/product/fd5650d1c517ed20/igrovaa-konsol-sony-playstation-5/',
+          faviconUrl: 'https://www.dns-shop.ru/favicon.ico',
+          selector: '.availability-text',
+          createdAt: dayAgo,
+          status: 'paused',
+          interval: '3h',
+          initialHtml: '<div class="availability-text">Нет в наличии</div>',
+          currentHtml: '<div class="availability-text">Нет в наличии</div>',
+          lastCheckedAt: dayAgo,
+          lastChangedAt: null,
+        }
+      ]
+    }
+    
+    // Генерация уникального ID
+    function generateId() {
+      return Date.now().toString(36) + Math.random().toString(36).substr(2, 5)
+    }
+    
+    // Добавление новой задачи
+    function handleAddTask() {
+      if (tasks.value.length >= maxTasks.value) {
+        alert('Достигнут лимит задач. Пожалуйста, удалите какую-либо задачу перед добавлением новой.')
+        return
+      }
+      
+      // Временная заглушка - в реальном расширении тут будет код для выбора элемента на странице
+      alert('Функция добавления новой задачи находится в разработке')
+    }
+    
+    // Обновление интервала задачи
+    async function updateTaskInterval(taskId, interval) {
+      const taskIndex = tasks.value.findIndex(task => task.id === taskId)
+      if (taskIndex !== -1) {
+        tasks.value[taskIndex].interval = interval
+        await saveTasks()
+      }
+    }
+    
+    // Обновление статуса задачи
+    async function updateTaskStatus(taskId, status) {
+      const taskIndex = tasks.value.findIndex(task => task.id === taskId)
+      if (taskIndex !== -1) {
+        tasks.value[taskIndex].status = status
+        await saveTasks()
+      }
+    }
+    
+    // Просмотр изменений
+    function viewTaskChanges(taskId) {
+      if (router) {
+        router.push(`/view-changes/${taskId}`)
+      } else {
+        console.warn('Router not available')
+        alert('Просмотр изменений временно недоступен')
+      }
+    }
+    
+    // Удаление задачи
+    async function removeTask(taskId) {
+      if (confirm('Вы уверены, что хотите удалить эту задачу?')) {
+        tasks.value = tasks.value.filter(task => task.id !== taskId)
+        await saveTasks()
+      }
+    }
+    
+    // Загрузка данных при монтировании
+    onMounted(() => {
+      loadTasks()
+    })
+    
+    return {
+      tasks,
+      loading,
+      error,
+      maxTasks,
+      activeTaskCount,
+      loadTasks,
+      handleAddTask,
+      updateTaskInterval,
+      updateTaskStatus,
+      viewTaskChanges,
+      removeTask
+    }
   }
-}
+})
 </script>

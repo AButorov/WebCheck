@@ -28,6 +28,9 @@ const router = createRouter({
 
 console.log('[ROUTER] Router created')
 
+// Делаем роутер доступным глобально для упрощения доступа в CSP-режиме
+window.vueRouter = router
+
 // Добавляем хуки роутера для отладки
 router.beforeEach((to, from) => {
   console.log(`[ROUTER] Navigating from "${from.path}" to "${to.path}"`)

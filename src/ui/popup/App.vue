@@ -4,25 +4,32 @@
   </div>
 </template>
 
-<script setup lang="ts">
-import { onMounted, onErrorCaptured, ref } from 'vue'
+<script>
+import { defineComponent, onMounted, onErrorCaptured } from 'vue'
 import '~/assets/styles/tailwind.css'
 
-const error = ref<Error | null>(null)
-
-onMounted(() => {
-  console.log('[APP] App component mounted')
+export default defineComponent({
+  name: 'App',
   
-  // Добавляем класс для скроллбара
-  document.documentElement.classList.add('custom-scrollbar')
-})
-
-// Обработка ошибок
-onErrorCaptured((err, instance, info) => {
-  console.error('[APP] Error captured:', err)
-  console.error('[APP] Error info:', info)
-  error.value = err as Error
-  return false // предотвращаем распространение ошибки
+  setup() {
+    // Обработка ошибок
+    onErrorCaptured((err, instance, info) => {
+      console.error('[APP] Error captured:', err)
+      console.error('[APP] Error info:', info)
+      
+      // Возвращаем false, чтобы остановить распространение ошибки
+      return false
+    })
+    
+    onMounted(() => {
+      console.log('[APP] App component mounted')
+      
+      // Добавляем класс для скроллбара
+      document.documentElement.classList.add('custom-scrollbar')
+    })
+    
+    return {}
+  }
 })
 </script>
 
