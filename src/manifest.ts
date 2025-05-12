@@ -22,7 +22,7 @@ export default defineManifest(async () => ({
     '128': 'icons/icon-128.png',
   },
   action: {
-    default_popup: 'src/ui/popup/index.html',
+    default_popup: 'src/pages/popup/index.html',
     default_icon: {
       '16': 'icons/icon-16.png',
       '32': 'icons/icon-32.png',
@@ -30,7 +30,7 @@ export default defineManifest(async () => ({
       '128': 'icons/icon-128.png',
     },
   },
-  options_page: 'src/ui/options/index.html',
+  options_page: 'src/pages/options/index.html',
   background: {
     service_worker: 'src/background/index.ts',
     type: 'module',

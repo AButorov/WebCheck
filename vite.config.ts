@@ -40,15 +40,27 @@ export default defineConfig({
     }),
   ],
   build: {
+    emptyOutDir: true,
+    outDir: 'dist',
     rollupOptions: {
-      input: resolve(__dirname, 'src/ui/popup/index.html'),
+      input: {
+        popup: resolve(__dirname, 'src/ui/popup/index.html'),
+        options: resolve(__dirname, 'src/ui/options/index.html'),
+      },
+      output: {
+        entryFileNames: 'src/pages/[name]/index.js',
+        chunkFileNames: 'assets/js/[name].js',
+        assetFileNames: (assetInfo) => {
+          if (assetInfo.name === 'index.css') {
+            return 'assets/css/[name][extname]'
+          }
+          return 'assets/[ext]/[name][extname]'
+        },
+      },
     },
     sourcemap: process.env.NODE_ENV === 'development',
     // Отключаем minify для устранения CSP ошибок
     minify: process.env.NODE_ENV === 'development' ? false : 'esbuild',
-    // CSP-безопасная сборка для production
-    target: 'esnext',
-    cssCodeSplit: false,
   },
   define: {
     // Добавляем флаги для предотвращения использования eval()

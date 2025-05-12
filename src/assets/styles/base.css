@@ -1,0 +1,44 @@
+/* Base styles for Web Check extension */
+body, html {
+  margin: 0;
+  padding: 0;
+  width: 400px;
+  height: 500px;
+  font-family: Arial, sans-serif;
+  font-size: 14px;
+  color: #333;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+:root {
+  --blue-500: #3b82f6;
+  --blue-600: #2563eb;
+  --gray-200: #e5e7eb;
+  --gray-500: #6b7280;
+  --red-50: #fef2f2;
+  --red-100: #fee2e2;
+  --red-800: #b91c1c;
+  --amber-50: #fffbeb;
+  --amber-500: #f59e0b;
+  --green-50: #f0fdf4;
+  --green-500: #22c55e;
+  --purple-600: #9333ea;
+}
+
+button {
+  cursor: pointer;
+  border: none;
+  background: none;
+  padding: 0;
+}
+
+button:focus {
+  outline: none;
+}
+
+.hidden {
+  display: none !important;
+}

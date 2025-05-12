@@ -1,10 +1,112 @@
-<template>
-  <div class="bg-white p-4 w-full">
+<style>
+.index-page {
+  padding: 16px;
+  width: 100%;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px;
+  border-bottom: 1px solid #e5e7eb;
+  margin-bottom: 16px;
+}
+
+.header h1 {
+  font-size: 1.25rem;
+  font-weight: bold;
+}
+
+.add-button {
+  background-color: #3b82f6;
+  color: white;
+  border-radius: 9999px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+}
+
+.add-button:hover {
+  background-color: #2563eb;
+}
+
+.loading {
+  text-align: center;
+  padding: 32px 0;
+}
+
+.spinner {
+  display: inline-block;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border-top: 2px solid #3b82f6;
+  border-bottom: 2px solid #3b82f6;
+  border-left: 2px solid transparent;
+  border-right: 2px solid transparent;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.loading p {
+  margin-top: 8px;
+  color: #6b7280;
+}
+
+.error {
+  text-align: center;
+  padding: 32px 0;
+}
+
+.error-box {
+  background-color: #fef2f2;
+  border: 1px solid #fee2e2;
+  color: #b91c1c;
+  border-radius: 0.5rem;
+  padding: 16px;
+}
+
+.retry-button {
+  margin-top: 8px;
+  color: #3b82f6;
+}
+
+.retry-button:hover {
+  text-decoration: underline;
+}
+
+.empty-list {
+  text-align: center;
+  padding: 32px 0;
+  color: #6b7280;
+}
+
+.footer {
+  padding: 16px;
+  border-top: 1px solid #e5e7eb;
+  margin-top: 16px;
+}
+
+.footer p {
+  text-align: center;
+  color: #6b7280;
+  font-size: 0.875rem;
+}
+</style><template>
+  <div class="index-page">
     <!-- Шапка приложения -->
-    <header class="flex justify-between items-center p-2 border-b mb-4">
-      <h1 class="text-xl font-bold">{{ t('popup.header.title') }}</h1>
+    <header class="header">
+      <h1>{{ t('popup.header.title') }}</h1>
       <button 
-        class="bg-blue-500 text-white rounded-full w-8 h-8 flex items-center justify-center shadow-sm hover:bg-blue-600"
+        class="add-button"
         :title="t('popup.header.addTask')"
         @click="handleAddTask"
       >
@@ -13,17 +115,17 @@
     </header>
     
     <!-- Индикатор загрузки -->
-    <div v-if="tasksStore.loading" class="text-center py-8">
-      <div class="inline-block animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
-      <p class="mt-2 text-gray-500">{{ t('popup.taskList.loading') }}</p>
+    <div v-if="tasksStore.loading" class="loading">
+      <div class="spinner"></div>
+      <p>{{ t('popup.taskList.loading') }}</p>
     </div>
     
     <!-- Сообщение об ошибке -->
-    <div v-else-if="tasksStore.error" class="text-center py-8">
-      <div class="bg-red-50 border border-red-200 text-red-800 rounded-lg p-4">
+    <div v-else-if="tasksStore.error" class="error">
+      <div class="error-box">
         <p>{{ tasksStore.error }}</p>
         <button 
-          class="mt-2 text-blue-500 hover:underline"
+          class="retry-button"
           @click="tasksStore.loadTasks()"
         >
           {{ t('popup.taskList.retry') }}
@@ -32,7 +134,7 @@
     </div>
     
     <!-- Пустой список задач -->
-    <div v-else-if="tasksStore.tasks.length === 0" class="text-center py-8 text-gray-500">
+    <div v-else-if="tasksStore.tasks.length === 0" class="empty-list">
       {{ t('popup.taskList.noTasks') }}
     </div>
     
@@ -50,8 +152,8 @@
     </div>
     
     <!-- Футер с информацией о количестве задач -->
-    <footer class="p-4 border-t mt-4">
-      <p class="text-center text-gray-500 text-sm">
+    <footer class="footer">
+      <p>
         {{ t('popup.taskList.activeCount', { count: tasksStore.activeTaskCount, total: tasksStore.maxTasks }) }}
       </p>
     </footer>

@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Web Check</title>
+  <style>
+    body, html {
+      width: 400px;
+      height: 500px;
+      margin: 0;
+      padding: 0;
+      font-family: Arial, sans-serif;
+    }
+    .debug-container {
+      padding: 20px;
+      background-color: #f8f9fa;
+      border: 1px solid #e9ecef;
+      border-radius: 4px;
+      margin: 20px;
+      max-width: 400px;
+    }
+    h1 {
+      color: #343a40;
+      font-size: 18px;
+    }
+    .debug-info {
+      color: #495057;
+      margin: 10px 0;
+    }
+    pre {
+      background-color: #e9ecef;
+      padding: 10px;
+      border-radius: 4px;
+      overflow: auto;
+      max-height: 200px;
+      font-size: 12px;
+    }
+    .status {
+      font-weight: bold;
+      margin-top: 10px;
+    }
+    .success {
+      color: #28a745;
+    }
+    .error {
+      color: #dc3545;
+    }
+  </style>
+</head>
+<body>
+  <div class="debug-container">
+    <h1>Web Check - Debug Page</h1>
+    <div class="debug-info">
+      <p>This is a diagnostic page for the Web Check extension to help identify issues with rendering.</p>
+      <p class="status">Vue Status: <span id="vue-status" class="error">Not Initialized</span></p>
+      <p class="status">Components: <span id="components-status" class="error">Not Loaded</span></p>
+      <p class="status">Router: <span id="router-status" class="error">Not Initialized</span></p>
+      <p class="status">Store: <span id="store-status" class="error">Not Initialized</span></p>
+    </div>
+    <h2>Environment Info</h2>
+    <pre id="env-info">Loading environment information...</pre>
+  </div>
+  
+  <div id="app"></div>
+  
+  <script>
+    // Basic diagnostic for environment
+    const envInfo = {
+      userAgent: navigator.userAgent,
+      date: new Date().toISOString(),
+      viewport: {
+        width: window.innerWidth,
+        height: window.innerHeight
+      },
+      location: window.location.href
+    };
+    
+    document.getElementById('env-info').textContent = JSON.stringify(envInfo, null, 2);
+    
+    // Let's make this page accessible even if Vue fails to load
+    setTimeout(() => {
+      if (document.getElementById('vue-status').className === 'error') {
+        console.error('Vue failed to initialize within 5 seconds');
+      }
+    }, 5000);
+  </script>
+  
+  <script type="module" src="/src/ui/popup/main.ts"></script>
+  
+  <script type="module">
+    // This will run after main.ts
+    setTimeout(() => {
+      document.getElementById('vue-status').className = 'success';
+      document.getElementById('vue-status').textContent = 'Initialized';
+      
+      if (window.app) {
+        document.getElementById('components-status').className = 'success';
+        document.getElementById('components-status').textContent = 'Loaded';
+      }
+      
+      if (window.router) {
+        document.getElementById('router-status').className = 'success';
+        document.getElementById('router-status').textContent = 'Initialized';
+      }
+      
+      if (window.store) {
+        document.getElementById('store-status').className = 'success';
+        document.getElementById('store-status').textContent = 'Initialized';
+      }
+    }, 1000);
+  </script>
+</body>
+</html>
