@@ -41,9 +41,9 @@ export default defineManifest(async () => ({
       js: ['src/content-script/index.ts'],
     },
   ],
-  // Обновлена CSP для поддержки Vue и удаления unsafe-inline
+  // Обновлена CSP без использования unsafe-eval
   content_security_policy: {
-    extension_pages: "script-src 'self' 'unsafe-eval'; object-src 'self'; style-src 'self' 'unsafe-inline';"
+    extension_pages: "script-src 'self'; object-src 'self'; style-src 'self' 'unsafe-inline';"
   },
   permissions: [
     'storage',

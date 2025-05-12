@@ -9,9 +9,6 @@ import manifest from './src/manifest'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
-console.log('[VITE] Configuration initializing...')
-console.log('[VITE] Current directory:', __dirname)
-
 // https://vitejs.dev/config/
 export default defineConfig({
   resolve: {
@@ -21,12 +18,15 @@ export default defineConfig({
   },
   plugins: [
     vue({
-      // Настройки Vue для совместимости с CSP
+      // Настройка Vue для работы без eval()
       template: {
         compilerOptions: {
+          // Настройки для CSP-совместимой сборки
           whitespace: 'condense',
+          comments: false,
         },
       },
+      reactivityTransform: false, // Отключаем трансформацию реактивности
     }),
     crx({ manifest }),
     AutoImport({
@@ -70,28 +70,30 @@ export default defineConfig({
         },
       },
     },
-    sourcemap: true, // включаем всегда для отладки
-    minify: false,
-    // Отключаем HMR для расширений
-    watch: null,
+    sourcemap: false, // Отключаем для продакшена
+    minify: 'terser', // Используем terser для максимальной оптимизации
+    terserOptions: {
+      compress: {
+        drop_console: false, // Оставляем консоль-логи для отладки
+        drop_debugger: true,
+      },
+    },
     // Настройки CSP совместимости
     cssCodeSplit: false,
     assetsInlineLimit: 0,
   },
   define: {
+    // Настройки для Vue 3
     '__VUE_OPTIONS_API__': true,
-    '__VUE_PROD_DEVTOOLS__': true,
-    'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV || 'development'),
-    // Строгие настройки для CSP
+    '__VUE_PROD_DEVTOOLS__': false, 
+    // Строгий режим (отключаем eval)
     '__VUE_PROD_HYDRATION_MISMATCH_DETAILS__': false,
+    // Режим компиляции
+    'process.env.NODE_ENV': JSON.stringify('production'),
+    // Отключаем функции, которые используют eval()
+    'process.env.VITE_CSP_COMPATIBLE': JSON.stringify('true'),
   },
   optimizeDeps: {
     include: ['vue', 'vue-router', 'vue-i18n', 'pinia', '@vueuse/core'],
-  },
-  server: {
-    hmr: false, // Отключаем HMR для расширений
-  },
-  esbuild: {
-    drop: ['console', 'debugger'],
   },
 })

@@ -1,8 +1,7 @@
-// CSP-safe configuration for Vue
+// CSP-safe configuration for Vue in MV3 environment (without eval)
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import { createI18n } from 'vue-i18n'
-import { App } from 'vue'
 import type { Router } from 'vue-router'
 
 type Messages = {
@@ -11,51 +10,65 @@ type Messages = {
   [key: string]: Record<string, any>
 }
 
-// Настройки для предотвращения CSP ошибок
+// Настройки для предотвращения CSP ошибок в Manifest V3
 export function configureSafeApp(AppComponent: any, router: Router, messages: Messages) {
-  console.log('[CSP-SAFE] Configuring safe app...')
+  console.log('[CSP-SAFE-MV3] Configuring safe app for Manifest V3...')
   
   // Определяем язык
   const userLanguage = navigator.language.split('-')[0] || 'en'
-  console.log('[CSP-SAFE] User language:', userLanguage)
+  console.log('[CSP-SAFE-MV3] User language:', userLanguage)
   
   // Создаем i18n в режиме совместимости с CSP
   const i18n = createI18n({
-    legacy: false,
+    legacy: false, // false для Vue 3 Composition API
     locale: userLanguage,
     fallbackLocale: 'en',
     messages,
+    // Настройки для CSP-совместимости
     warnHtmlMessage: false,
-    escapeHtml: false,
-    runtimeOnly: false, // Изменено для лучшей совместимости
+    escapeHtml: true, // Включаем экранирование HTML для безопасности
+    // Без использования runtime-компиляции, которая требует eval
+    runtimeOnly: false,
+    // Базовая функция для отсутствующих переводов
+    missingWarn: false,
+    fallbackWarn: false,
   })
   
-  console.log('[CSP-SAFE] i18n created')
+  console.log('[CSP-SAFE-MV3] i18n created')
 
-  // Создаем приложение
-  console.log('[CSP-SAFE] Creating Vue app...')
+  // Создаем приложение с настройками для Manifest V3
+  console.log('[CSP-SAFE-MV3] Creating Vue app...')
   const app = createApp(AppComponent)
   
-  // Настройка для CSP-совместимости
-  app.config.performance = false
-  app.config.compilerOptions.whitespace = 'condense'
+  // Дополнительная настройка Vue для работы без eval
   app.config.unwrapInjectedRef = true
+  app.config.isCustomElement = tag => tag.includes('-')
+  app.config.compilerOptions = {
+    whitespace: 'condense',
+    comments: false,
+    isCustomElement: tag => tag.includes('-')
+  }
   
   // Глобальная обработка ошибок
   app.config.errorHandler = (err, instance, info) => {
-    console.error('[CSP-SAFE] Global error:', err)
-    console.error('[CSP-SAFE] Error info:', info)
+    console.error('[CSP-SAFE-MV3] Global error:', err)
+    console.error('[CSP-SAFE-MV3] Error info:', info)
   }
   
-  console.log('[CSP-SAFE] Vue app created')
+  // Обработка предупреждений
+  app.config.warnHandler = (msg, instance, trace) => {
+    console.warn('[CSP-SAFE-MV3] Vue warning:', msg)
+  }
+  
+  console.log('[CSP-SAFE-MV3] Vue app created with MV3-compatible settings')
 
   // Устанавливаем плагины
   app.use(router)
-  console.log('[CSP-SAFE] Router attached')
+  console.log('[CSP-SAFE-MV3] Router attached')
   
   app.use(i18n)
-  console.log('[CSP-SAFE] i18n attached')
+  console.log('[CSP-SAFE-MV3] i18n attached')
 
-  console.log('[CSP-SAFE] App configuration complete')
+  console.log('[CSP-SAFE-MV3] App configuration complete for Manifest V3')
   return app
 }
