@@ -22,7 +22,8 @@ export default defineManifest(async () => ({
     '128': 'icons/icon-128.png',
   },
   action: {
-    default_popup: 'src/pages/popup/index.html',
+    // ВАЖНО! Исправлен путь к popup
+    default_popup: 'src/ui/popup/index.html',
     default_icon: {
       '16': 'icons/icon-16.png',
       '32': 'icons/icon-32.png',
@@ -30,7 +31,7 @@ export default defineManifest(async () => ({
       '128': 'icons/icon-128.png',
     },
   },
-  options_page: 'src/pages/options/index.html',
+  options_page: 'src/ui/options/index.html',
   background: {
     service_worker: 'src/background/index.ts',
     type: 'module',
@@ -41,9 +42,9 @@ export default defineManifest(async () => ({
       js: ['src/content-script/index.ts'],
     },
   ],
-  // Добавляем CSP для совместимости с Vue
+  // Обновлен CSP для совместимости с Vue и разработкой
   content_security_policy: {
-    extension_pages: "script-src 'self'; object-src 'self'; style-src 'self' 'unsafe-inline';"
+    extension_pages: "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'; style-src 'self' 'unsafe-inline';"
   },
   permissions: [
     'storage',

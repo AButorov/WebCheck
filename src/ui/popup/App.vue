@@ -5,14 +5,24 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { onMounted, onErrorCaptured, ref } from 'vue'
 import '~/assets/styles/tailwind.css'
 
+const error = ref<Error | null>(null)
+
 onMounted(() => {
-  console.log('App component mounted')
+  console.log('[APP] App component mounted')
   
   // Добавляем класс для скроллбара
   document.documentElement.classList.add('custom-scrollbar')
+})
+
+// Обработка ошибок
+onErrorCaptured((err, instance, info) => {
+  console.error('[APP] Error captured:', err)
+  console.error('[APP] Error info:', info)
+  error.value = err as Error
+  return false // предотвращаем распространение ошибки
 })
 </script>
 

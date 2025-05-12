@@ -13,36 +13,55 @@ type Messages = {
 
 // Настройки для предотвращения CSP ошибок
 export function configureSafeApp(AppComponent: any, router: Router, messages: Messages) {
-  // Отключение ошибок и предупреждений в production
-  if (process.env.NODE_ENV === 'production') {
-    console.log = () => {}
-    console.warn = () => {}
-    console.error = () => {}
-  }
-
+  console.log('[CSP-SAFE] Configuring safe app...')
+  console.log('[CSP-SAFE] Messages:', Object.keys(messages))
+  
+  // Определяем язык
+  const userLanguage = navigator.language.split('-')[0] || 'en'
+  console.log('[CSP-SAFE] User language:', userLanguage)
+  
   // Создаем i18n без использования eval() где возможно
   const i18n = createI18n({
     legacy: false,
-    locale: navigator.language.split('-')[0] || 'en',
+    locale: userLanguage,
     fallbackLocale: 'en',
     messages,
     warnHtmlMessage: false, // Отключаем предупреждения
     escapeHtml: false, // Отключаем экранирование HTML
     runtimeOnly: true, // Только runtime режим
     // Отключаем компиляцию сообщений, которая может использовать eval()
-    missing: (locale: string, key: string) => key,
+    missing: (locale: string, key: string) => {
+      console.warn(`[CSP-SAFE] Missing translation: ${locale} - ${key}`)
+      return key
+    },
   })
+  
+  console.log('[CSP-SAFE] i18n created')
 
   // Создаем приложение с безопасными настройками
+  console.log('[CSP-SAFE] Creating Vue app...')
   const app = createApp(AppComponent)
-  const pinia = createPinia()
+  console.log('[CSP-SAFE] Vue app created')
 
-  // Дополнительные настройки (Vue 3 больше не использует эти пропсы, но при необходимости можно добавить логику)
-  
   // Устанавливаем плагины
-  app.use(pinia)
   app.use(router)
+  console.log('[CSP-SAFE] Router attached')
+  
   app.use(i18n)
+  console.log('[CSP-SAFE] i18n attached')
 
+  // Глобальная обработка ошибок
+  app.config.errorHandler = (err, instance, info) => {
+    console.error('[CSP-SAFE] Global error:', err)
+    console.error('[CSP-SAFE] Error info:', info)
+  }
+  
+  // Обработка предупреждений
+  app.config.warnHandler = (msg, instance, trace) => {
+    console.warn('[CSP-SAFE] Vue warning:', msg)
+    console.warn('[CSP-SAFE] Warning trace:', trace)
+  }
+
+  console.log('[CSP-SAFE] App configuration complete')
   return app
 }
