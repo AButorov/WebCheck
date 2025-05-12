@@ -20,7 +20,14 @@ export default defineConfig({
     },
   },
   plugins: [
-    vue(),
+    vue({
+      // Настройки Vue для совместимости с CSP
+      template: {
+        compilerOptions: {
+          whitespace: 'condense',
+        },
+      },
+    }),
     crx({ manifest }),
     AutoImport({
       imports: [
@@ -47,19 +54,15 @@ export default defineConfig({
     outDir: 'dist',
     rollupOptions: {
       input: {
-        // Исправлены пути входных файлов
         popup: resolve(__dirname, 'src/ui/popup/index.html'),
         options: resolve(__dirname, 'src/ui/options/index.html'),
       },
       output: {
-        // Исправлены пути выходных файлов для соответствия манифесту
         entryFileNames: chunk => {
-          console.log('[VITE] Processing chunk:', chunk.name)
           return 'src/ui/[name]/index.js'
         },
         chunkFileNames: 'assets/js/[name].js',
         assetFileNames: (assetInfo) => {
-          console.log('[VITE] Processing asset:', assetInfo.name)
           if (assetInfo.name === 'index.css') {
             return 'assets/css/[name][extname]'
           }
@@ -68,23 +71,27 @@ export default defineConfig({
       },
     },
     sourcemap: true, // включаем всегда для отладки
-    // Отключаем minify для устранения CSP ошибок во время разработки
     minify: false,
+    // Отключаем HMR для расширений
+    watch: null,
+    // Настройки CSP совместимости
+    cssCodeSplit: false,
+    assetsInlineLimit: 0,
   },
   define: {
-    // Добавляем флаги для предотвращения использования eval()
-    '__VUE_OPTIONS_API__': 'true',
-    '__VUE_PROD_DEVTOOLS__': 'true', // включаем для отладки
+    '__VUE_OPTIONS_API__': true,
+    '__VUE_PROD_DEVTOOLS__': true,
     'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV || 'development'),
+    // Строгие настройки для CSP
+    '__VUE_PROD_HYDRATION_MISMATCH_DETAILS__': false,
   },
   optimizeDeps: {
     include: ['vue', 'vue-router', 'vue-i18n', 'pinia', '@vueuse/core'],
   },
   server: {
-    hmr: {
-      // Отключаем WebSocket для устранения CSP ошибок
-      protocol: 'ws',
-      host: 'localhost',
-    },
+    hmr: false, // Отключаем HMR для расширений
+  },
+  esbuild: {
+    drop: ['console', 'debugger'],
   },
 })

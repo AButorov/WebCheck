@@ -22,7 +22,6 @@ export default defineManifest(async () => ({
     '128': 'icons/icon-128.png',
   },
   action: {
-    // ВАЖНО! Исправлен путь к popup
     default_popup: 'src/ui/popup/index.html',
     default_icon: {
       '16': 'icons/icon-16.png',
@@ -42,9 +41,9 @@ export default defineManifest(async () => ({
       js: ['src/content-script/index.ts'],
     },
   ],
-  // Обновлен CSP для совместимости с Vue и разработкой
+  // Обновлена CSP для поддержки Vue и удаления unsafe-inline
   content_security_policy: {
-    extension_pages: "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'; style-src 'self' 'unsafe-inline';"
+    extension_pages: "script-src 'self' 'unsafe-eval'; object-src 'self'; style-src 'self' 'unsafe-inline';"
   },
   permissions: [
     'storage',

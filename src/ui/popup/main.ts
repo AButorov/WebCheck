@@ -10,9 +10,22 @@ import ru from '~/locales/ru.json'
 // Use our CSP-safe configuration
 import { configureSafeApp } from './csp-safe'
 
-console.log('[POPUP] Starting popup initialization...')
-console.log('[POPUP] App component:', App)
-console.log('[POPUP] Router:', router)
+// Добавляем отдельный скрипт для логирования, чтобы избежать inline скриптов
+const logDomState = () => {
+  console.log('[POPUP] Starting popup initialization...')
+  console.log('[POPUP] DOM state:', {
+    appElement: document.getElementById('app'),
+    body: document.body,
+    documentReady: document.readyState
+  })
+}
+
+// Выполняем логирование когда DOM готов
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', logDomState)
+} else {
+  logDomState()
+}
 
 // Initialize Pinia
 const pinia = createPinia()
@@ -28,6 +41,14 @@ console.log('[POPUP] Pinia attached to app')
 
 // Mount app
 console.log('[POPUP] Mounting app to #app element...')
-console.log('[POPUP] HTML structure:', document.body.innerHTML)
 app.mount('#app')
 console.log('[POPUP] App mounted')
+
+// Настройка глобальной обработки ошибок
+window.addEventListener('error', (event) => {
+  console.error('[POPUP] Global error:', event.error)
+})
+
+window.addEventListener('unhandledrejection', (event) => {
+  console.error('[POPUP] Unhandled Promise rejection:', event.reason)
+})
