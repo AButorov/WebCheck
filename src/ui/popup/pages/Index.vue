@@ -1,10 +1,10 @@
 <template>
-  <div class="min-h-[500px] w-[400px] p-4">
+  <div class="min-h-[500px] w-[380px] p-3">
     <!-- Шапка приложения -->
     <header class="flex justify-between items-center mb-6 pb-2 border-b">
       <h1 class="text-2xl font-bold">Web Check</h1>
       <button 
-        class="bg-blue-600 text-white p-2 rounded-full hover:bg-blue-700 transition-colors"
+        :class="`bg-[${COLORS.ADD_TASK}] text-white p-2 rounded-full hover:bg-blue-700 transition-colors`"
         title="Добавить новую задачу"
         @click="handleAddTask"
       >
@@ -16,7 +16,7 @@
     
     <!-- Индикатор загрузки -->
     <div v-if="loading" class="flex justify-center items-center h-64">
-      <div class="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-blue-600"></div>
+      <div :class="`animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-[${COLORS.PRIMARY}]`"></div>
       <span class="ml-3 text-gray-600">Загрузка задач...</span>
     </div>
     
@@ -27,7 +27,7 @@
       </svg>
       <p class="text-red-800 mb-2">{{ error }}</p>
       <button 
-        class="text-blue-600 hover:underline mt-2"
+        :class="`text-[${COLORS.PRIMARY}] hover:underline mt-2`"
         @click="loadTasks"
       >
         Попробовать снова
@@ -41,7 +41,7 @@
       </svg>
       <p class="text-lg mb-4">Нет активных задач.</p>
       <button 
-        class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition-colors"
+        :class="`bg-[${COLORS.ADD_TASK}] text-white px-4 py-2 rounded hover:bg-blue-700 transition-colors`"
         @click="handleAddTask"
       >
         Добавить задачу
@@ -76,6 +76,7 @@
 import { defineComponent, onMounted, ref, computed } from 'vue'
 import TaskCard from '~/components/TaskCard.vue'
 import browser from 'webextension-polyfill'
+import { COLORS, MAX_TASKS } from '~/utils/constants'
 
 export default defineComponent({
   name: 'IndexPage',
@@ -89,7 +90,7 @@ export default defineComponent({
     const tasks = ref([])
     const loading = ref(true)
     const error = ref(null)
-    const maxTasks = ref(5)
+    const maxTasks = ref(MAX_TASKS)
     
     // Вычисляемые свойства
     const activeTaskCount = computed(() => {

@@ -1,6 +1,7 @@
 #!/bin/bash
 
-# Скрипт для создания резервной копии проекта с меткой времени
+# Эта функция только создает резервную копию проекта, 
+# она не дублирует функциональность скрипта build.sh
 
 # Проверка наличия команды tar
 if ! command -v tar &> /dev/null; then
@@ -20,23 +21,6 @@ BACKUP_NAME="web_check_backup_${TIMESTAMP}.tar.gz"
 BACKUP_PATH="backups/${BACKUP_NAME}"
 
 echo "Создание резервной копии проекта: ${BACKUP_NAME}"
-
-# Проверка наличия незафиксированных изменений
-if command -v git &> /dev/null && [ -d ".git" ]; then
-    if [ -n "$(git status --porcelain)" ]; then
-        echo "Внимание: Обнаружены незафиксированные изменения в репозитории."
-        echo "Рекомендуется зафиксировать изменения перед созданием резервной копии."
-    fi
-fi
-
-# Проверка и очистка временных файлов перед архивацией
-if [ -d "dist" ]; then
-    echo "Обнаружена директория dist. Она будет исключена из резервной копии."
-fi
-
-if [ -d "node_modules" ]; then
-    echo "Обнаружена директория node_modules. Она будет исключена из резервной копии."
-fi
 
 # Исключаем ненужные папки
 tar --exclude="node_modules" --exclude="dist" --exclude="backups" --exclude=".git" --exclude=".DS_Store" -czf "${BACKUP_PATH}" .

@@ -2,52 +2,71 @@
   <div 
     :class="cardClasses"
   >
-    <!-- Заголовок и статус -->
-    <div class="flex items-start mb-2">
-      <div class="mr-3">
+    <!-- Статус и заголовок -->
+    <div class="flex items-start">
+      <div class="mr-2">
         <button 
           @click="toggleStatus" 
-          class="flex items-center justify-center w-6 h-6 border-2 rounded" 
+          class="flex items-center justify-center w-5 h-5 border-2 rounded" 
           :class="checkboxClass"
+          :title="statusTitle"
         >
-          <svg v-if="task.status !== 'paused'" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+          <svg v-if="task.status !== 'paused'" xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
             <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
           </svg>
         </button>
       </div>
       
-      <div class="flex-grow">
-        <h3 class="text-lg font-bold mb-1 pr-6">{{ task.title }}</h3>
-        <div class="flex items-center text-sm text-gray-600 mb-1">
+      <div class="flex-grow mr-16">
+        <h3 class="text-md font-bold mb-0.5 truncate">{{ task.title }}</h3>
+        <div class="flex items-center text-xs text-gray-600">
           <img 
             :src="task.faviconUrl || '/icons/icon-16.png'" 
             alt="Site icon" 
-            class="w-4 h-4 mr-1"
+            class="w-3 h-3 mr-1"
             @error="onFaviconError"
           />
           <a :href="task.url" target="_blank" class="hover:underline truncate">{{ displayUrl }}</a>
         </div>
       </div>
       
-      <!-- Кнопка удаления -->
-      <button 
-        class="absolute top-2 right-2 text-red-500 hover:bg-red-50 rounded-full p-1"
-        @click="emit('remove', task.id)"
-        title="Удалить задачу"
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-          <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
-        </svg>
-      </button>
+      <!-- Кнопки управления (справа вверху) -->
+      <div class="absolute top-2 right-2 flex space-x-1">
+        <!-- Кнопка просмотра изменений -->
+        <button 
+          class="rounded-full p-1.5"
+          :class="viewButtonClass"
+          :disabled="task.status !== 'changed'"
+          @click="emit('view', task.id)"
+          :title="task.status === 'changed' ? 'Просмотр изменений' : 'Нет изменений для просмотра'"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd" />
+          </svg>
+        </button>
+        
+        <!-- Кнопка удаления -->
+        <button 
+          :class="`text-white bg-[${COLORS.DELETE}] hover:bg-red-600 rounded-full p-1.5`"
+          @click="emit('remove', task.id)"
+          title="Удалить задачу"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
+          </svg>
+        </button>
+      </div>
     </div>
     
-    <!-- Интервал и кнопка просмотра изменений -->
-    <div class="flex items-center justify-between mt-3">
-      <div class="flex items-center">
-        <span class="text-sm mr-2">Интервал:</span>
+    <!-- Интервал и прогресс -->
+    <div class="flex items-center mt-2">
+      <div class="flex items-center text-xs mr-4">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 mr-1 text-gray-500" viewBox="0 0 20 20" fill="currentColor">
+          <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd" />
+        </svg>
         <select 
           v-model="interval" 
-          class="bg-white border border-gray-300 rounded px-2 py-1 text-sm"
+          class="bg-transparent text-xs border border-gray-300 rounded px-1 py-0.5"
           :disabled="task.status === 'paused'"
           @change="updateInterval"
         >
@@ -58,32 +77,17 @@
         </select>
       </div>
       
-      <!-- Кнопка просмотра изменений -->
-      <button 
-        class="bg-purple-600 text-white px-3 py-1 rounded flex items-center"
-        :disabled="task.status !== 'changed'"
-        :class="{ 'opacity-50 cursor-not-allowed': task.status !== 'changed' }"
-        @click="emit('view', task.id)"
-        title="Просмотр изменений"
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
-          <path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd" />
-        </svg>
-        Просмотр
-      </button>
-    </div>
-    
-    <!-- Прогресс-бар и время до следующей проверки -->
-    <div class="mt-3">
-      <div class="bg-gray-200 rounded-full h-2 mb-1">
-        <div 
-          class="h-2 rounded-full"
-          :style="{ width: remainingTimePercent + '%' }"
-          :class="progressClass"
-        ></div>
-      </div>
-      <div class="text-xs text-gray-500">
-        {{ remainingTimeText }}
+      <div class="flex-grow">
+        <div class="bg-gray-200 rounded-full h-1.5">
+          <div 
+            class="h-1.5 rounded-full"
+            :style="{ width: remainingTimePercent + '%' }"
+            :class="progressClass"
+          ></div>
+        </div>
+        <div class="text-xs text-gray-500 mt-0.5">
+          {{ remainingTimeText }}
+        </div>
       </div>
     </div>
   </div>
@@ -91,6 +95,7 @@
 
 <script>
 import { defineComponent, ref, computed } from 'vue'
+import { COLORS } from '~/utils/constants'
 
 export default defineComponent({
   name: 'TaskCard',
@@ -128,29 +133,49 @@ export default defineComponent({
       }
     })
     
+    // Заголовок статуса для подсказки
+    const statusTitle = computed(() => {
+      switch (props.task.status) {
+        case 'changed':
+          return 'Обнаружены изменения (нажмите чтобы приостановить)'
+        case 'unchanged':
+          return 'Активно (нажмите чтобы приостановить)'
+        case 'paused':
+          return 'Приостановлено (нажмите чтобы возобновить)'
+      }
+    })
+    
     // Определение классов для чекбокса в зависимости от статуса
     const checkboxClass = computed(() => {
       switch (props.task.status) {
         case 'changed':
-          return 'text-amber-500 border-amber-500'
+          return `text-[${COLORS.CHANGED.MAIN}] border-[${COLORS.CHANGED.MAIN}]`
         case 'unchanged':
-          return 'text-green-500 border-green-500'
+          return `text-[${COLORS.UNCHANGED.MAIN}] border-[${COLORS.UNCHANGED.MAIN}]`
         case 'paused':
-          return 'text-gray-400 border-gray-400'
+          return `text-[${COLORS.PAUSED.MAIN}] border-[${COLORS.PAUSED.MAIN}]`
       }
+    })
+    
+    // Определение классов для кнопки просмотра в зависимости от статуса
+    const viewButtonClass = computed(() => {
+      if (props.task.status === 'changed') {
+        return `text-white bg-[${COLORS.VIEW_CHANGES}] hover:bg-purple-700`
+      }
+      return 'text-white bg-gray-400 cursor-not-allowed'
     })
     
     // Классы для карточки
     const cardClasses = computed(() => {
-      const baseClasses = 'task-card relative rounded-xl p-4 mb-4 border-2 transition-all hover:shadow-md'
+      const baseClasses = 'task-card relative rounded-lg p-3 mb-3 border-2 transition-all hover:shadow-md'
       
       switch (props.task.status) {
         case 'changed':
-          return `${baseClasses} bg-amber-50 border-amber-200`
+          return `${baseClasses} bg-[${COLORS.CHANGED.BG}] border-[${COLORS.CHANGED.BORDER}]`
         case 'unchanged':
-          return `${baseClasses} bg-green-50 border-green-200`
+          return `${baseClasses} bg-[${COLORS.UNCHANGED.BG}] border-[${COLORS.UNCHANGED.BORDER}]`
         case 'paused':
-          return `${baseClasses} bg-gray-50 border-gray-200`
+          return `${baseClasses} bg-[${COLORS.PAUSED.BG}] border-[${COLORS.PAUSED.BORDER}]`
       }
     })
     
@@ -158,11 +183,11 @@ export default defineComponent({
     const progressClass = computed(() => {
       switch (props.task.status) {
         case 'changed':
-          return 'bg-amber-500'
+          return `bg-[${COLORS.CHANGED.MAIN}]`
         case 'unchanged':
-          return 'bg-green-500'
+          return `bg-[${COLORS.UNCHANGED.MAIN}]`
         case 'paused':
-          return 'bg-gray-400'
+          return `bg-[${COLORS.PAUSED.MAIN}]`
       }
     })
     
@@ -244,8 +269,10 @@ export default defineComponent({
       checkboxClass,
       cardClasses,
       progressClass,
+      viewButtonClass,
       remainingTimePercent,
       remainingTimeText,
+      statusTitle,
       onFaviconError,
       updateInterval,
       toggleStatus,
