@@ -1,0 +1,68 @@
+{
+  "app": {
+    "name": "Web Check",
+    "description": "Track changes on web pages with minimal effort"
+  },
+  "popup": {
+    "header": {
+      "title": "Web Check",
+      "addTask": "Add new task"
+    },
+    "taskList": {
+      "activeCount": "Active {count} of {total} tasks",
+      "noTasks": "No active tasks. Press + to add a new task."
+    },
+    "taskCard": {
+      "intervals": {
+        "15m": "15 minutes",
+        "1h": "1 hour",
+        "3h": "3 hours",
+        "1d": "1 day"
+      },
+      "statuses": {
+        "changed": "Changes detected",
+        "unchanged": "No changes",
+        "paused": "Task paused"
+      },
+      "actions": {
+        "view": "View changes",
+        "delete": "Delete task",
+        "pause": "Pause task",
+        "resume": "Resume task"
+      }
+    }
+  },
+  "notifications": {
+    "change": {
+      "title": "Changes detected!",
+      "message": "Changes detected on {site}"
+    }
+  },
+  "options": {
+    "title": "Web Check Settings",
+    "general": "General Settings",
+    "language": "Language",
+    "maxTasks": "Maximum number of tasks",
+    "maxTasksDescription": "Maximum number of tracking tasks that can be created",
+    "defaultInterval": "Default check interval",
+    "notifications": "Notifications",
+    "enableNotifications": "Enable notifications",
+    "notificationSound": "Notification sound",
+    "defaultSound": "Default sound",
+    "noSound": "No sound",
+    "data": "Data",
+    "exportData": "Export data",
+    "importData": "Import data",
+    "resetData": "Reset all data",
+    "settingsSaved": "Settings saved",
+    "dataImported": "Data imported successfully",
+    "dataImportError": "Error importing data",
+    "dataReset": "All data has been reset",
+    "resetSettings": "Reset settings",
+    "saveSettings": "Save",
+    "confirmReset": "Confirm data reset",
+    "confirmResetDescription": "Are you sure you want to reset all data? This action will delete all tracking tasks and settings. This action cannot be undone.",
+    "cancel": "Cancel",
+    "confirmResetBtn": "Yes, reset data"
+  }
+}
