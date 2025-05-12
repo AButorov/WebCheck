@@ -10,9 +10,21 @@
     },
     "taskList": {
       "activeCount": "Active {count} of {total} tasks",
-      "noTasks": "No active tasks. Press + to add a new task."
+      "noTasks": "No active tasks. Press + to add a new task.",
+      "loading": "Loading tasks...",
+      "error": "Error loading data",
+      "retry": "Try again",
+      "addFirst": "Add first task",
+      "confirmDelete": "Are you sure you want to delete this task?"
     },
     "taskCard": {
+      "interval": {
+        "label": "Interval",
+        "15m": "15m",
+        "1h": "1h",
+        "3h": "3h",
+        "1d": "1d"
+      },
       "intervals": {
         "15m": "15 minutes",
         "1h": "1 hour",
@@ -25,11 +37,29 @@
         "paused": "Task paused"
       },
       "actions": {
-        "view": "View changes",
+        "view": "View",
         "delete": "Delete task",
         "pause": "Pause task",
         "resume": "Resume task"
-      }
+      },
+      "paused": "Paused",
+      "nextCheck": "Next check in {time}"
+    },
+    "errors": {
+      "taskLimitReached": "Task limit reached. Please delete an existing task before adding a new one.",
+      "noActiveTab": "No active tab found. Please open a web page before adding a task.",
+      "selectorActivation": "Error activating the element selector."
+    },
+    "viewChanges": {
+      "title": "View Changes",
+      "original": "Original",
+      "current": "Current",
+      "backButton": "Back",
+      "openPage": "Open page",
+      "originalSnapshot": "Original snapshot from {date}",
+      "currentSnapshot": "Current snapshot from {date}",
+      "noChanges": "No changes detected",
+      "loading": "Loading changes..."
     }
   },
   "notifications": {
