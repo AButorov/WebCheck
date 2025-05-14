@@ -1,17 +1,25 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
-import Index from '~/ui/options/pages/Index.vue'
 
+// Импортируем страницы
+import Index from '../pages/Index.vue'
+
+// Создаем маршруты
 const routes = [
   {
     path: '/',
-    name: 'Index',
-    component: Index,
+    name: 'index',
+    component: Index
   }
 ]
 
+// Создаем экземпляр маршрутизатора
 const router = createRouter({
   history: createWebHashHistory(),
-  routes,
+  routes
 })
+
+// Делаем маршрутизатор доступным глобально
+// Это необходимо для совместимости с CSP в Manifest V3
+window.vueRouter = router
 
 export default router

@@ -7,23 +7,23 @@
       <div class="mr-2">
         <button 
           @click="toggleStatus" 
-          class="flex items-center justify-center w-5 h-5 border-2 rounded" 
+          class="flex items-center justify-center w-6 h-6 border-2 rounded" 
           :class="checkboxClass"
           :title="statusTitle"
         >
-          <svg v-if="task.status !== 'paused'" xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
+          <svg v-if="task.status !== 'paused'" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
             <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
           </svg>
         </button>
       </div>
       
-      <div class="flex-grow mr-16">
-        <h3 class="text-md font-bold mb-0.5 truncate">{{ task.title }}</h3>
-        <div class="flex items-center text-xs text-gray-600">
+      <div class="flex-grow mr-20">
+        <h3 class="text-lg font-bold mb-1 truncate">{{ task.title }}</h3>
+        <div class="flex items-center text-sm text-gray-600">
           <img 
             :src="task.faviconUrl || '/icons/icon-16.png'" 
             alt="Site icon" 
-            class="w-3 h-3 mr-1"
+            class="w-4 h-4 mr-1.5"
             @error="onFaviconError"
           />
           <a :href="task.url" target="_blank" class="hover:underline truncate">{{ displayUrl }}</a>
@@ -31,7 +31,7 @@
       </div>
       
       <!-- Кнопки управления (справа вверху) -->
-      <div class="absolute top-2 right-2 flex space-x-1">
+      <div class="absolute top-2 right-2 flex space-x-1.5">
         <!-- Кнопка просмотра изменений -->
         <button 
           class="rounded-full p-1.5"
@@ -40,8 +40,30 @@
           @click="emit('view', task.id)"
           :title="task.status === 'changed' ? 'Просмотр изменений' : 'Нет изменений для просмотра'"
         >
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
             <path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd" />
+          </svg>
+        </button>
+        
+        <!-- Кнопка редактирования -->
+        <button 
+          class="text-white bg-[#2196f3] hover:bg-blue-600 rounded-full p-1.5"
+          @click="emit('edit', task.id)"
+          title="Редактировать задачу"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+            <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+          </svg>
+        </button>
+        
+        <!-- Кнопка обновления -->
+        <button 
+          class="text-white bg-[#ff9800] hover:bg-orange-600 rounded-full p-1.5"
+          @click="emit('refresh', task.id)"
+          title="Обновить сейчас"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd" />
           </svg>
         </button>
         
@@ -51,7 +73,7 @@
           @click="emit('remove', task.id)"
           title="Удалить задачу"
         >
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
             <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
           </svg>
         </button>
@@ -59,14 +81,14 @@
     </div>
     
     <!-- Интервал и прогресс -->
-    <div class="flex items-center mt-2">
-      <div class="flex items-center text-xs mr-4">
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 mr-1 text-gray-500" viewBox="0 0 20 20" fill="currentColor">
+    <div class="flex items-center mt-3">
+      <div class="flex items-center text-sm mr-4">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1.5 text-gray-600" viewBox="0 0 20 20" fill="currentColor">
           <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd" />
         </svg>
         <select 
           v-model="interval" 
-          class="bg-transparent text-xs border border-gray-300 rounded px-1 py-0.5"
+          class="bg-transparent text-sm border border-gray-300 rounded px-2 py-0.5"
           :disabled="task.status === 'paused'"
           @change="updateInterval"
         >
@@ -78,14 +100,14 @@
       </div>
       
       <div class="flex-grow">
-        <div class="bg-gray-200 rounded-full h-1.5">
+        <div class="bg-gray-200 rounded-full h-2">
           <div 
-            class="h-1.5 rounded-full"
+            class="h-2 rounded-full"
             :style="{ width: remainingTimePercent + '%' }"
             :class="progressClass"
           ></div>
         </div>
-        <div class="text-xs text-gray-500 mt-0.5">
+        <div class="text-sm text-gray-600 mt-1">
           {{ remainingTimeText }}
         </div>
       </div>
@@ -96,7 +118,7 @@
 <script>
 import { defineComponent, ref, computed } from 'vue'
 // Константы используются только в JavaScript, не в шаблонах
-import { COLORS } from '~/utils/constants'
+import { COLORS, CHECK_INTERVALS } from '~/utils/constants'
 
 export default defineComponent({
   name: 'TaskCard',
@@ -108,7 +130,7 @@ export default defineComponent({
     }
   },
   
-  emits: ['update:interval', 'update:status', 'view', 'remove'],
+  emits: ['update:interval', 'update:status', 'view', 'remove', 'edit', 'refresh'],
   
   setup(props, { emit }) {
     // Локальный реф для интервала
@@ -168,7 +190,7 @@ export default defineComponent({
     
     // Классы для карточки
     const cardClasses = computed(() => {
-      const baseClasses = 'task-card relative rounded-lg p-3 mb-3 border-2 transition-all hover:shadow-md'
+      const baseClasses = 'task-card relative rounded-lg p-4 mb-4 border-2 transition-all hover:shadow-md'
       
       switch (props.task.status) {
         case 'changed':
@@ -244,17 +266,18 @@ export default defineComponent({
     
     // Преобразование интервала в миллисекунды
     function getIntervalMs(interval) {
+      // Используем константы из файла констант
       switch (interval) {
-        case '15m':
-          return 15 * 60 * 1000
-        case '1h':
-          return 60 * 60 * 1000
-        case '3h':
-          return 3 * 60 * 60 * 1000
-        case '1d':
-          return 24 * 60 * 60 * 1000
+        case CHECK_INTERVALS.FIFTEEN_MINUTES.value:
+          return CHECK_INTERVALS.FIFTEEN_MINUTES.milliseconds
+        case CHECK_INTERVALS.ONE_HOUR.value:
+          return CHECK_INTERVALS.ONE_HOUR.milliseconds
+        case CHECK_INTERVALS.THREE_HOURS.value:
+          return CHECK_INTERVALS.THREE_HOURS.milliseconds
+        case CHECK_INTERVALS.ONE_DAY.value:
+          return CHECK_INTERVALS.ONE_DAY.milliseconds
         default:
-          return 60 * 60 * 1000 // default to 1 hour
+          return CHECK_INTERVALS.ONE_HOUR.milliseconds // По умолчанию 1 час
       }
     }
     

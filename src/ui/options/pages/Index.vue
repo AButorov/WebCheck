@@ -1,274 +1,452 @@
 <template>
-  <div class="container mx-auto p-6 max-w-3xl">
-    <h1 class="text-2xl font-bold mb-6">{{ t('options.title') }}</h1>
-    
-    <div class="bg-white rounded-lg shadow-sm p-6 mb-6">
-      <h2 class="text-xl font-semibold mb-4">{{ t('options.general') }}</h2>
-      
-      <!-- Языковые настройки -->
-      <div class="mb-4">
-        <label class="block text-gray-700 mb-2" for="language">
-          {{ t('options.language') }}
-        </label>
-        <select 
-          id="language" 
-          v-model="language" 
-          class="w-full border border-gray-300 rounded px-3 py-2"
-        >
-          <option value="ru">Русский</option>
-          <option value="en">English</option>
-        </select>
+  <div class="options-page bg-white min-h-screen p-6">
+    <header class="mb-8">
+      <div class="flex items-center justify-between mb-4">
+        <h1 class="text-2xl font-bold text-gray-900">{{ translate('options.title') }}</h1>
+        <div class="flex items-center">
+          <img src="/icons/icon-48.png" alt="Web Check Logo" class="h-10 w-10 mr-2">
+          <span class="text-sm text-gray-500">Версия {{ version }}</span>
+        </div>
       </div>
-      
-      <!-- Максимальное количество задач -->
-      <div class="mb-4">
-        <label class="block text-gray-700 mb-2" for="maxTasks">
-          {{ t('options.maxTasks') }}
-        </label>
-        <input 
-          id="maxTasks" 
-          v-model="maxTasks" 
-          type="number" 
-          min="1" 
-          max="20" 
-          class="w-full border border-gray-300 rounded px-3 py-2"
-        />
-        <p class="text-sm text-gray-500 mt-1">
-          {{ t('options.maxTasksDescription') }}
-        </p>
-      </div>
-      
-      <!-- Интервал проверки по умолчанию -->
-      <div class="mb-4">
-        <label class="block text-gray-700 mb-2" for="defaultInterval">
-          {{ t('options.defaultInterval') }}
-        </label>
-        <select 
-          id="defaultInterval" 
-          v-model="defaultInterval" 
-          class="w-full border border-gray-300 rounded px-3 py-2"
-        >
-          <option value="15m">{{ t('popup.taskCard.intervals.15m') }}</option>
-          <option value="1h">{{ t('popup.taskCard.intervals.1h') }}</option>
-          <option value="3h">{{ t('popup.taskCard.intervals.3h') }}</option>
-          <option value="1d">{{ t('popup.taskCard.intervals.1d') }}</option>
-        </select>
-      </div>
-    </div>
-    
-    <div class="bg-white rounded-lg shadow-sm p-6 mb-6">
-      <h2 class="text-xl font-semibold mb-4">{{ t('options.notifications') }}</h2>
-      
-      <!-- Включение/выключение уведомлений -->
-      <div class="mb-4">
-        <label class="flex items-center">
-          <input 
-            type="checkbox" 
-            v-model="enableNotifications" 
-            class="form-checkbox h-5 w-5 text-primary"
-          />
-          <span class="ml-2">{{ t('options.enableNotifications') }}</span>
-        </label>
-      </div>
-      
-      <!-- Звук уведомлений -->
-      <div class="mb-4" v-if="enableNotifications">
-        <label class="block text-gray-700 mb-2" for="notificationSound">
-          {{ t('options.notificationSound') }}
-        </label>
-        <select 
-          id="notificationSound" 
-          v-model="notificationSound" 
-          class="w-full border border-gray-300 rounded px-3 py-2"
-        >
-          <option value="default">{{ t('options.defaultSound') }}</option>
-          <option value="none">{{ t('options.noSound') }}</option>
-        </select>
-      </div>
-    </div>
-    
-    <div class="bg-white rounded-lg shadow-sm p-6 mb-6">
-      <h2 class="text-xl font-semibold mb-4">{{ t('options.data') }}</h2>
-      
-      <!-- Экспорт/импорт данных -->
-      <div class="flex flex-wrap gap-4">
-        <button 
-          @click="exportData" 
-          class="bg-primary text-white px-4 py-2 rounded hover:bg-primary-bright transition-colors"
-        >
-          {{ t('options.exportData') }}
-        </button>
+      <div class="h-0.5 bg-gray-200 w-full"></div>
+    </header>
+
+    <main class="max-w-3xl mx-auto">
+      <!-- Форма настроек -->
+      <form @submit.prevent="saveSettings" class="space-y-8">
+        <!-- Секция основных настроек -->
+        <div class="bg-gray-50 p-6 rounded-lg shadow-sm">
+          <h2 class="text-lg font-semibold text-gray-800 mb-4">{{ translate('options.general') }}</h2>
+          
+          <!-- Язык интерфейса -->
+          <div class="mb-4">
+            <label for="language" class="block text-sm font-medium text-gray-700 mb-1">{{ translate('options.language') }}</label>
+            <select 
+              id="language" 
+              v-model="settings.language" 
+              class="w-full p-2 border border-gray-300 rounded-md shadow-sm text-sm"
+            >
+              <option v-for="lang in availableLanguages" :key="lang.code" :value="lang.code">
+                {{ lang.name }}
+              </option>
+            </select>
+          </div>
+          
+          <!-- Интервал проверки по умолчанию -->
+          <div class="mb-4">
+            <label for="defaultInterval" class="block text-sm font-medium text-gray-700 mb-1">{{ translate('options.defaultInterval') }}</label>
+            <select 
+              id="defaultInterval" 
+              v-model="settings.defaultInterval" 
+              class="w-full p-2 border border-gray-300 rounded-md shadow-sm text-sm"
+            >
+              <option value="15m">{{ translate('popup.taskCard.intervals.15m') }}</option>
+              <option value="1h">{{ translate('popup.taskCard.intervals.1h') }}</option>
+              <option value="3h">{{ translate('popup.taskCard.intervals.3h') }}</option>
+              <option value="1d">{{ translate('popup.taskCard.intervals.1d') }}</option>
+            </select>
+          </div>
+          
+          <!-- Максимальное количество задач -->
+          <div class="mb-4">
+            <label for="maxTasks" class="block text-sm font-medium text-gray-700 mb-1">{{ translate('options.maxTasks') }}</label>
+            <div class="relative mt-1 rounded-md shadow-sm">
+              <input 
+                type="number" 
+                id="maxTasks" 
+                v-model="settings.maxTasks" 
+                min="1" 
+                max="20"
+                class="w-full p-2 border border-gray-300 rounded-md shadow-sm text-sm"
+              >
+            </div>
+            <p class="mt-1 text-xs text-gray-500">Значение от 1 до 20 задач</p>
+          </div>
+        </div>
         
-        <label 
-          class="bg-gray-600 text-white px-4 py-2 rounded hover:bg-gray-700 transition-colors cursor-pointer"
-        >
-          {{ t('options.importData') }}
+        <!-- Секция уведомлений -->
+        <div class="bg-gray-50 p-6 rounded-lg shadow-sm">
+          <h2 class="text-lg font-semibold text-gray-800 mb-4">{{ translate('options.notifications') }}</h2>
+          
+          <!-- Переключатель уведомлений -->
+          <div class="flex items-center justify-between mb-4">
+            <div>
+              <label for="notifications" class="text-sm font-medium text-gray-700">{{ translate('options.enableNotifications') }}</label>
+              <p class="text-xs text-gray-500">Показывать всплывающие уведомления при обнаружении изменений</p>
+            </div>
+            <div>
+              <button 
+                type="button" 
+                :class="[
+                  'relative inline-flex h-6 w-11 items-center rounded-full transition-colors',
+                  settings.notifications ? 'bg-blue-600' : 'bg-gray-300'
+                ]"
+                @click="settings.notifications = !settings.notifications"
+              >
+                <span 
+                  :class="[
+                    'inline-block h-4 w-4 rounded-full bg-white transition-transform',
+                    settings.notifications ? 'translate-x-6' : 'translate-x-1'
+                  ]"
+                />
+              </button>
+            </div>
+          </div>
+          
+          <!-- Переключатель счетчика на иконке -->
+          <div class="flex items-center justify-between mb-4">
+            <div>
+              <label for="badgeCounter" class="text-sm font-medium text-gray-700">Счетчик на иконке</label>
+              <p class="text-xs text-gray-500">Показывать количество найденных изменений на иконке расширения</p>
+            </div>
+            <div>
+              <button 
+                type="button" 
+                :class="[
+                  'relative inline-flex h-6 w-11 items-center rounded-full transition-colors',
+                  settings.badgeCounter ? 'bg-blue-600' : 'bg-gray-300'
+                ]"
+                @click="settings.badgeCounter = !settings.badgeCounter"
+              >
+                <span 
+                  :class="[
+                    'inline-block h-4 w-4 rounded-full bg-white transition-transform',
+                    settings.badgeCounter ? 'translate-x-6' : 'translate-x-1'
+                  ]"
+                />
+              </button>
+            </div>
+          </div>
+          
+          <!-- Переключатель авто-возобновления -->
+          <div class="flex items-center justify-between">
+            <div>
+              <label for="autoResume" class="text-sm font-medium text-gray-700">Автоматическое возобновление</label>
+              <p class="text-xs text-gray-500">Автоматически возобновлять отслеживание при запуске браузера</p>
+            </div>
+            <div>
+              <button 
+                type="button" 
+                :class="[
+                  'relative inline-flex h-6 w-11 items-center rounded-full transition-colors',
+                  settings.autoResume ? 'bg-blue-600' : 'bg-gray-300'
+                ]"
+                @click="settings.autoResume = !settings.autoResume"
+              >
+                <span 
+                  :class="[
+                    'inline-block h-4 w-4 rounded-full bg-white transition-transform',
+                    settings.autoResume ? 'translate-x-6' : 'translate-x-1'
+                  ]"
+                />
+              </button>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Секция данных -->
+        <div class="bg-gray-50 p-6 rounded-lg shadow-sm">
+          <h2 class="text-lg font-semibold text-gray-800 mb-4">{{ translate('options.data') }}</h2>
+          
+          <div class="flex flex-col md:flex-row space-y-3 md:space-y-0 md:space-x-3">
+            <button 
+              type="button"
+              @click="resetSettings"
+              class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50"
+            >
+              {{ translate('options.resetSettings') }}
+            </button>
+            <button 
+              type="button"
+              @click="exportData"
+              class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50"
+            >
+              {{ translate('options.exportData') }}
+            </button>
+            <button 
+              type="button"
+              @click="showImportDialog = true"
+              class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50"
+            >
+              {{ translate('options.importData') }}
+            </button>
+            <button 
+              type="button"
+              @click="clearAllData"
+              class="px-4 py-2 text-sm font-medium text-white bg-red-600 border border-red-600 rounded-md shadow-sm hover:bg-red-700"
+            >
+              {{ translate('options.resetData') }}
+            </button>
+          </div>
+        </div>
+        
+        <!-- Кнопки действий -->
+        <div class="flex justify-end space-x-3">
+          <button 
+            type="button"
+            @click="resetForm"
+            class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50"
+          >
+            {{ translate('options.cancel') }}
+          </button>
+          <button 
+            type="submit"
+            class="px-4 py-2 text-sm font-medium text-white bg-[#2d6cdf] rounded-md shadow-sm hover:bg-blue-700"
+          >
+            {{ translate('options.saveSettings') }}
+          </button>
+        </div>
+      </form>
+    </main>
+    
+    <!-- Модальное окно для импорта данных -->
+    <div v-if="showImportDialog" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
+      <div class="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+        <h3 class="text-lg font-semibold text-gray-900 mb-4">Импорт данных</h3>
+        <p class="text-sm text-gray-600 mb-4">
+          Загрузите файл экспорта данных Web Check. Это заменит все ваши текущие настройки и задачи.
+        </p>
+        <div class="mb-4">
           <input 
             type="file" 
-            @change="importData" 
-            accept=".json" 
-            class="hidden"
+            @change="handleFileUpload" 
+            class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
           />
-        </label>
-        
-        <button
-          @click="resetConfirmationVisible = true"
-          class="bg-red-action text-white px-4 py-2 rounded hover:bg-red-600 transition-colors"
-        >
-          {{ t('options.resetData') }}
-        </button>
+        </div>
+        <div class="flex justify-end space-x-3">
+          <button 
+            type="button"
+            @click="showImportDialog = false"
+            class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50"
+          >
+            Отмена
+          </button>
+          <button 
+            type="button"
+            @click="importData"
+            :disabled="!importFile"
+            :class="[
+              'px-4 py-2 text-sm font-medium text-white rounded-md shadow-sm',
+              importFile ? 'bg-[#2d6cdf] hover:bg-blue-700' : 'bg-gray-400 cursor-not-allowed'
+            ]"
+          >
+            Импортировать
+          </button>
+        </div>
       </div>
     </div>
     
-    <!-- Кнопки в нижней части -->
-    <div class="flex justify-end gap-4">
-      <button 
-        @click="resetSettings" 
-        class="px-4 py-2 border border-gray-300 rounded hover:bg-gray-100 transition-colors"
-      >
-        {{ t('options.resetSettings') }}
-      </button>
-      
-      <button 
-        @click="saveSettings" 
-        class="bg-primary text-white px-4 py-2 rounded hover:bg-primary-bright transition-colors"
-      >
-        {{ t('options.saveSettings') }}
-      </button>
-    </div>
-    
-    <!-- Модальное окно подтверждения сброса данных -->
-    <div v-if="resetConfirmationVisible" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-      <div class="bg-white rounded-lg p-6 max-w-md mx-4">
-        <h3 class="text-xl font-bold mb-4">{{ t('options.confirmReset') }}</h3>
-        <p class="mb-6">{{ t('options.confirmResetDescription') }}</p>
-        
-        <div class="flex justify-end gap-4">
-          <button 
-            @click="resetConfirmationVisible = false" 
-            class="px-4 py-2 border border-gray-300 rounded hover:bg-gray-100 transition-colors"
-          >
-            {{ t('options.cancel') }}
-          </button>
-          
-          <button 
-            @click="resetData" 
-            class="bg-red-action text-white px-4 py-2 rounded hover:bg-red-600 transition-colors"
-          >
-            {{ t('options.confirmResetBtn') }}
-          </button>
+    <!-- Сообщение об успешном сохранении -->
+    <div 
+      v-if="showSuccessMessage" 
+      class="fixed bottom-4 right-4 bg-green-50 border-l-4 border-green-500 p-4 rounded shadow-md"
+    >
+      <div class="flex">
+        <div class="flex-shrink-0">
+          <svg class="h-5 w-5 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+          </svg>
+        </div>
+        <div class="ml-3">
+          <p class="text-sm text-green-700">{{ successMessage }}</p>
         </div>
       </div>
     </div>
   </div>
 </template>
 
-<script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { useI18n } from 'vue-i18n'
+<script>
+import { defineComponent, ref, reactive, onMounted, watch } from 'vue'
+import { AVAILABLE_LANGUAGES, DEFAULT_SETTINGS } from '~/utils/constants'
 import browser from 'webextension-polyfill'
-import { useTasksStore } from '~/stores/tasks'
+import packageJson from '../../../../package.json'
+import { translate } from '~/utils/i18n-helper'
 
-const { t, locale } = useI18n()
-const tasksStore = useTasksStore()
-
-// Настройки
-const language = ref('ru')
-const maxTasks = ref(5)
-const defaultInterval = ref('1h')
-const enableNotifications = ref(true)
-const notificationSound = ref('default')
-const resetConfirmationVisible = ref(false)
-
-// Загрузка настроек
-onMounted(async () => {
-  const storage = await browser.storage.local.get('settings')
-  if (storage.settings) {
-    language.value = storage.settings.language || 'ru'
-    maxTasks.value = storage.settings.maxTasks || 5
-    defaultInterval.value = storage.settings.defaultInterval || '1h'
-    enableNotifications.value = storage.settings.enableNotifications !== false
-    notificationSound.value = storage.settings.notificationSound || 'default'
+export default defineComponent({
+  name: 'OptionsPage',
+  
+  setup() {
+    // Версия расширения
+    const version = ref(packageJson.version)
     
-    // Установка языка
-    locale.value = language.value
-  }
-})
-
-// Сохранение настроек
-async function saveSettings() {
-  const settings = {
-    language: language.value,
-    maxTasks: maxTasks.value,
-    defaultInterval: defaultInterval.value,
-    enableNotifications: enableNotifications.value,
-    notificationSound: notificationSound.value,
-  }
-  
-  await browser.storage.local.set({ settings })
-  
-  // Обновление языка
-  locale.value = language.value
-  
-  // Обновление максимального количества задач
-  tasksStore.maxTasks = maxTasks.value
-  
-  alert(t('options.settingsSaved'))
-}
-
-// Сброс настроек
-async function resetSettings() {
-  language.value = 'ru'
-  maxTasks.value = 5
-  defaultInterval.value = '1h'
-  enableNotifications.value = true
-  notificationSound.value = 'default'
-}
-
-// Экспорт данных
-async function exportData() {
-  const storage = await browser.storage.local.get()
-  const dataStr = JSON.stringify(storage, null, 2)
-  const dataUri = `data:application/json;charset=utf-8,${encodeURIComponent(dataStr)}`
-  
-  const exportEl = document.createElement('a')
-  exportEl.setAttribute('href', dataUri)
-  exportEl.setAttribute('download', `web-check-backup-${new Date().toISOString().slice(0, 10)}.json`)
-  exportEl.click()
-}
-
-// Импорт данных
-async function importData(event: Event) {
-  const input = event.target as HTMLInputElement
-  if (!input.files?.length) return
-  
-  const file = input.files[0]
-  const reader = new FileReader()
-  
-  reader.onload = async (e) => {
-    try {
-      const data = JSON.parse(e.target?.result as string)
-      await browser.storage.local.set(data)
-      alert(t('options.dataImported'))
+    // Настройки
+    const settings = reactive({ ...DEFAULT_SETTINGS })
+    const originalSettings = ref(null)
+    
+    // Доступные языки
+    const availableLanguages = ref(AVAILABLE_LANGUAGES)
+    
+    // Состояние UI
+    const showSuccessMessage = ref(false)
+    const successMessage = ref('')
+    const showImportDialog = ref(false)
+    const importFile = ref(null)
+    
+    // Загрузка настроек при монтировании
+    onMounted(async () => {
+      await loadSettings()
+    })
+    
+    // Загрузка настроек из storage
+    async function loadSettings() {
+      try {
+        const result = await browser.storage.local.get('settings')
+        if (result.settings) {
+          // Объединяем значения по умолчанию с сохраненными настройками
+          Object.assign(settings, { ...DEFAULT_SETTINGS, ...result.settings })
+        }
+        // Сохраняем копию оригинальных настроек для кнопки отмены
+        originalSettings.value = { ...settings }
+      } catch (error) {
+        console.error('Ошибка при загрузке настроек:', error)
+        showMessage('Ошибка при загрузке настроек. Используются значения по умолчанию.')
+      }
+    }
+    
+    // Сохранение настроек
+    async function saveSettings() {
+      try {
+        await browser.storage.local.set({ settings })
+        originalSettings.value = { ...settings }
+        showMessage('Настройки успешно сохранены')
+      } catch (error) {
+        console.error('Ошибка при сохранении настроек:', error)
+        showMessage('Ошибка при сохранении настроек')
+      }
+    }
+    
+    // Сброс формы
+    function resetForm() {
+      // Восстанавливаем значения из оригинальных настроек
+      if (originalSettings.value) {
+        Object.assign(settings, originalSettings.value)
+      }
+    }
+    
+    // Сброс настроек на значения по умолчанию
+    function resetSettings() {
+      if (confirm('Вы уверены, что хотите сбросить все настройки до значений по умолчанию?')) {
+        Object.assign(settings, DEFAULT_SETTINGS)
+        saveSettings()
+      }
+    }
+    
+    // Удаление всех данных
+    function clearAllData() {
+      if (confirm('ВНИМАНИЕ: Это действие нельзя отменить. Вы уверены, что хотите удалить ВСЕ данные?')) {
+        try {
+          browser.storage.local.clear()
+          Object.assign(settings, DEFAULT_SETTINGS)
+          showMessage('Все данные успешно удалены')
+        } catch (error) {
+          console.error('Ошибка при удалении данных:', error)
+          showMessage('Ошибка при удалении данных')
+        }
+      }
+    }
+    
+    // Обработка загрузки файла для импорта
+    function handleFileUpload(event) {
+      const file = event.target.files[0]
+      if (file) {
+        importFile.value = file
+      }
+    }
+    
+    // Импорт данных из файла
+    function importData() {
+      if (!importFile.value) return
       
-      // Перезагрузка страницы для применения новых настроек
-      window.location.reload()
-    } catch (error) {
-      alert(t('options.dataImportError'))
-      console.error('Import error:', error)
+      const reader = new FileReader()
+      reader.onload = async (e) => {
+        try {
+          const data = JSON.parse(e.target.result)
+          
+          // Проверка структуры данных
+          if (!data || (!data.settings && !data.tasks)) {
+            throw new Error('Недопустимый формат файла')
+          }
+          
+          // Импорт настроек
+          if (data.settings) {
+            await browser.storage.local.set({ settings: data.settings })
+            Object.assign(settings, data.settings)
+          }
+          
+          // Импорт задач
+          if (data.tasks) {
+            await browser.storage.local.set({ tasks: data.tasks })
+          }
+          
+          showImportDialog.value = false
+          showMessage('Данные успешно импортированы')
+        } catch (error) {
+          console.error('Ошибка при импорте данных:', error)
+          showMessage('Ошибка при импорте данных. Проверьте формат файла.')
+        }
+      }
+      reader.readAsText(importFile.value)
+    }
+    
+    // Экспорт данных
+    async function exportData() {
+      try {
+        // Получаем все данные из storage
+        const data = await browser.storage.local.get(null)
+        
+        // Создаем и скачиваем файл
+        const json = JSON.stringify(data, null, 2)
+        const blob = new Blob([json], { type: 'application/json' })
+        const url = URL.createObjectURL(blob)
+        
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `web-check-export-${new Date().toISOString().slice(0, 10)}.json`
+        document.body.appendChild(a)
+        a.click()
+        
+        setTimeout(() => {
+          document.body.removeChild(a)
+          URL.revokeObjectURL(url)
+        }, 100)
+        
+        showMessage('Данные успешно экспортированы')
+      } catch (error) {
+        console.error('Ошибка при экспорте данных:', error)
+        showMessage('Ошибка при экспорте данных')
+      }
+    }
+    
+    // Отображение сообщения
+    function showMessage(message) {
+      successMessage.value = message
+      showSuccessMessage.value = true
+      
+      // Скрываем сообщение через 3 секунды
+      setTimeout(() => {
+        showSuccessMessage.value = false
+      }, 3000)
+    }
+    
+    return {
+      version,
+      settings,
+      availableLanguages,
+      showSuccessMessage,
+      successMessage,
+      showImportDialog,
+      importFile,
+      loadSettings,
+      saveSettings,
+      resetForm,
+      resetSettings,
+      clearAllData,
+      handleFileUpload,
+      importData,
+      exportData,
+      showMessage,
+      translate // Экспортируем функцию перевода в шаблон
     }
   }
-  
-  reader.readAsText(file)
-}
-
-// Сброс данных
-async function resetData() {
-  await browser.storage.local.clear()
-  resetConfirmationVisible.value = false
-  alert(t('options.dataReset'))
-  
-  // Перезагрузка страницы
-  window.location.reload()
-}
+})
 </script>
