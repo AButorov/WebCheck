@@ -7,73 +7,37 @@
       <div class="mr-2">
         <button 
           @click="toggleStatus" 
-          class="flex items-center justify-center w-6 h-6 border-2 rounded" 
+          class="flex items-center justify-center w-7 h-7 border-2 rounded" 
           :class="checkboxClass"
           :title="statusTitle"
         >
-          <svg v-if="task.status !== 'paused'" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+          <svg v-if="task.status !== 'paused'" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
             <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
           </svg>
         </button>
       </div>
       
       <div class="flex-grow mr-20">
-        <h3 class="text-lg font-bold mb-1 truncate">{{ task.title }}</h3>
-        <div class="flex items-center text-sm text-gray-600">
+        <h3 class="text-xl font-bold mb-1 truncate">{{ task.title }}</h3>
+        <div class="flex items-center text-base text-gray-600">
           <img 
             :src="task.faviconUrl || '/icons/icon-16.png'" 
             alt="Site icon" 
-            class="w-4 h-4 mr-1.5"
+            class="w-5 h-5 mr-1.5"
             @error="onFaviconError"
           />
           <a :href="task.url" target="_blank" class="hover:underline truncate">{{ displayUrl }}</a>
         </div>
       </div>
       
-      <!-- Кнопки управления (справа вверху) -->
-      <div class="absolute top-2 right-2 flex space-x-1.5">
-        <!-- Кнопка просмотра изменений -->
-        <button 
-          class="rounded-full p-1.5"
-          :class="viewButtonClass"
-          :disabled="task.status !== 'changed'"
-          @click="emit('view', task.id)"
-          :title="task.status === 'changed' ? 'Просмотр изменений' : 'Нет изменений для просмотра'"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-            <path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd" />
-          </svg>
-        </button>
-        
-        <!-- Кнопка редактирования -->
-        <button 
-          class="text-white bg-[#2196f3] hover:bg-blue-600 rounded-full p-1.5"
-          @click="emit('edit', task.id)"
-          title="Редактировать задачу"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-            <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
-          </svg>
-        </button>
-        
-        <!-- Кнопка обновления -->
-        <button 
-          class="text-white bg-[#ff9800] hover:bg-orange-600 rounded-full p-1.5"
-          @click="emit('refresh', task.id)"
-          title="Обновить сейчас"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-            <path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd" />
-          </svg>
-        </button>
-        
-        <!-- Кнопка удаления -->
+      <!-- Кнопка удаления (справа вверху) -->
+      <div class="absolute top-2 right-2">
         <button 
           class="text-white bg-[#f44336] hover:bg-red-600 rounded-full p-1.5"
           @click="emit('remove', task.id)"
           title="Удалить задачу"
         >
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
             <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
           </svg>
         </button>
@@ -83,7 +47,7 @@
     <!-- Интервал и прогресс -->
     <div class="flex items-center mt-3">
       <div class="flex items-center text-sm mr-4">
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1.5 text-gray-600" viewBox="0 0 20 20" fill="currentColor">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1.5 text-gray-600" viewBox="0 0 20 20" fill="currentColor">
           <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd" />
         </svg>
         <select 
@@ -100,9 +64,9 @@
       </div>
       
       <div class="flex-grow">
-        <div class="bg-gray-200 rounded-full h-2">
+        <div class="bg-gray-200 rounded-full h-3">
           <div 
-            class="h-2 rounded-full"
+            class="h-3 rounded-full"
             :style="{ width: remainingTimePercent + '%' }"
             :class="progressClass"
           ></div>
@@ -111,6 +75,48 @@
           {{ remainingTimeText }}
         </div>
       </div>
+    </div>
+    
+    <!-- Блок кнопок (остановка/возобновление, просмотр изменений) -->
+    <div class="flex space-x-2 mt-3 justify-end">
+      <!-- Кнопка остановки/возобновления -->
+      <button 
+        class="text-white rounded-full p-2"
+        :class="task.status === 'paused' ? 'bg-[#4caf50] hover:bg-green-600' : 'bg-[#ff9800] hover:bg-orange-600'"
+        @click="toggleStatus"
+        :title="task.status === 'paused' ? 'Возобновить отслеживание' : 'Приостановить отслеживание'"
+      >
+        <svg v-if="task.status === 'paused'" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+          <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd" />
+        </svg>
+        <svg v-else xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+          <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM7 8a1 1 0 012 0v4a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd" />
+        </svg>
+      </button>
+      
+      <!-- Кнопка просмотра изменений -->
+      <button 
+        class="rounded-full p-2"
+        :class="viewButtonClass"
+        :disabled="task.status !== 'changed'"
+        @click="emit('view', task.id)"
+        :title="task.status === 'changed' ? 'Просмотр изменений' : 'Нет изменений для просмотра'"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+          <path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd" />
+        </svg>
+      </button>
+      
+      <!-- Кнопка обновления -->
+      <button 
+        class="text-white bg-[#2196f3] hover:bg-blue-600 rounded-full p-2"
+        @click="emit('refresh', task.id)"
+        title="Обновить сейчас"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+          <path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd" />
+        </svg>
+      </button>
     </div>
   </div>
 </template>
@@ -185,7 +191,7 @@ export default defineComponent({
       if (props.task.status === 'changed') {
         return 'text-white bg-[#673ab7] hover:bg-purple-700'
       }
-      return 'text-white bg-gray-400 cursor-not-allowed'
+      return 'text-white bg-gray-400 cursor-not-allowed opacity-50'
     })
     
     // Классы для карточки
