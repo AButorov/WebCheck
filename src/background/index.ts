@@ -3,6 +3,9 @@ import { onMessage } from 'webext-bridge/background'
 import { WebCheckTask } from '~/types/task'
 import { MessagePayloads } from '~/types/messages'
 
+// Импортируем модуль захвата элементов
+import './capture'
+
 // Обработка установки расширения
 browser.runtime.onInstalled.addListener(({ reason }) => {
   if (reason === 'install') {

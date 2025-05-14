@@ -40,7 +40,7 @@ export default defineManifest(async (env) => ({
     {
       matches: ['http://*/*', 'https://*/*'],
       js: ['src/content-script/index.ts'],
-    },
+    }
   ],
   // CSP для MV3 - максимально строгая, без unsafe-eval
   content_security_policy: {
@@ -52,6 +52,8 @@ export default defineManifest(async (env) => ({
     'notifications',
     'scripting',
     'activeTab',
+    'tabs',
+    'tabCapture',
   ],
   host_permissions: [
     'http://*/*',

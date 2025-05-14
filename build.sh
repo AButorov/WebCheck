@@ -2,7 +2,7 @@
 
 # Универсальный скрипт для подготовки и сборки расширения Web Check
 # Включает все необходимые проверки и создает CSP-совместимую MV3 продуктивную версию
-# Последнее обновление: 15.05.2025 - Улучшен интерфейс расширения
+# Последнее обновление: 16.05.2025 16:30 - Исправлена ошибка конвертации TS в JS
 
 # Цвета для вывода
 RED='\033[0;31m'
@@ -238,6 +238,67 @@ build_project() {
     fi
     
     echo -e "${GREEN}✓ Сборка успешно завершена${NC}"
+    
+    # Копирование необходимых файлов
+    post_build_processing
+}
+
+# Функция для обработки файлов после сборки
+post_build_processing() {
+    echo -e "\n${CYAN}Пост-обработка файлов сборки...${NC}"
+    
+    # Создание необходимых директорий
+    mkdir -p dist/content-script/element-picker
+    
+    # Копирование файла element-picker
+    echo -e "${YELLOW}Копирование element-picker/index.js...${NC}"
+    
+    # Проверяем наличие исходного файла
+    ELEMENT_PICKER_SRC="src/content-script/element-picker/index.ts"
+    if [ ! -f "$ELEMENT_PICKER_SRC" ]; then
+        echo -e "${RED}Ошибка: Файл $ELEMENT_PICKER_SRC не найден${NC}"
+        return
+    fi
+    
+    # Создаем JS версию файла напрямую
+    echo -e "${YELLOW}Создание JS версии файла...${NC}"
+    
+    # Создаем конечный файл
+    OUTPUT_FILE="dist/content-script/element-picker/index.js"
+    
+    # Копируем содержимое исходного файла
+    cat "$ELEMENT_PICKER_SRC" > "$OUTPUT_FILE"
+    
+    # Заменяем TypeScript-специфичные конструкции на JavaScript
+    # Замена типов интерфейсов
+    sed -i'.bak' '/^interface /d' "$OUTPUT_FILE"
+    sed -i'.bak' '/: [a-zA-Z]\+;/d' "$OUTPUT_FILE"
+    sed -i'.bak' 's/: [a-zA-Z]\+//g' "$OUTPUT_FILE"
+    
+    # Удаляем объявления типов
+    sed -i'.bak' 's/\(const [a-zA-Z0-9_]\+\): [a-zA-Z]\+ = /\1 = /g' "$OUTPUT_FILE"
+    sed -i'.bak' 's/\(let [a-zA-Z0-9_]\+\): [a-zA-Z]\+ = /\1 = /g' "$OUTPUT_FILE"
+    sed -i'.bak' 's/\(function [a-zA-Z0-9_]\+\)(\([^)]*\)): [a-zA-Z]\+ {/\1(\2) {/g' "$OUTPUT_FILE"
+    
+    # Удаляем прочие TypeScript аннотации
+    sed -i'.bak' 's/as [a-zA-Z]\+//g' "$OUTPUT_FILE"
+    
+    # Убираем типы в параметрах функций
+    sed -i'.bak' 's/\([a-zA-Z0-9_]\+\): [a-zA-Z]\+/\1/g' "$OUTPUT_FILE"
+    
+    # Добавляем шапку для работы с Chrome API
+    sed -i'.bak' '1s/^/\/\/ Element Picker for Web Check Extension\n\n/' "$OUTPUT_FILE"
+    
+    # Удаляем временные файлы
+    rm -f "${OUTPUT_FILE}.bak"
+    
+    # Проверяем, что файл был создан
+    if [ -f "$OUTPUT_FILE" ]; then
+        # Добавляем комментарий в начало файла
+        echo -e "${GREEN}✓ Файл element-picker/index.js успешно создан${NC}"
+    else
+        echo -e "${RED}Ошибка: Не удалось создать файл element-picker/index.js${NC}"
+    fi
 }
 
 # Функция для проверки и исправления manifest.json

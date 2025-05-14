@@ -1,10 +1,12 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
 import Index from '~/ui/popup/pages/Index.vue'
 import ViewChanges from '~/ui/popup/pages/ViewChanges.vue'
+import NewTask from '~/ui/popup/pages/NewTask.vue'
 
 console.log('[ROUTER] Initializing router...')
 console.log('[ROUTER] Index component:', Index)
 console.log('[ROUTER] ViewChanges component:', ViewChanges)
+console.log('[ROUTER] NewTask component:', NewTask)
 
 const routes = [
   {
@@ -16,6 +18,11 @@ const routes = [
     path: '/view-changes/:id',
     name: 'ViewChanges',
     component: ViewChanges,
+  },
+  {
+    path: '/new-task',
+    name: 'NewTask',
+    component: NewTask,
   }
 ]
 

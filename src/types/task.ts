@@ -15,4 +15,14 @@ export interface WebCheckTask {
   currentHtml: string;
   lastCheckedAt: number;
   lastChangedAt: number | null;
+  thumbnailUrl?: string; // URL скриншота элемента для предпросмотра
+}
+
+export interface ElementInfo {
+  selector: string;
+  rect: DOMRect;
+  html: string;
+  pageTitle: string;
+  pageUrl: string;
+  faviconUrl: string;
 }
