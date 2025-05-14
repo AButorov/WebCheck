@@ -4,19 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Web Check - Настройки</title>
-  <script>
-    console.log('[OPTIONS HTML] Loading options page...');
-    window.addEventListener('DOMContentLoaded', () => {
-      console.log('[OPTIONS HTML] DOM content loaded');
-      console.log('[OPTIONS HTML] #app element exists:', !!document.getElementById('app'));
-    });
-    window.addEventListener('load', () => {
-      console.log('[OPTIONS HTML] Page fully loaded');
-    });
-    window.addEventListener('error', (event) => {
-      console.error('[OPTIONS HTML] Error:', event.error);
-    });
-  </script>
+  <!-- Убираем inline-скрипты для CSP-совместимости -->
 </head>
 <body>
   <div id="app"></div>

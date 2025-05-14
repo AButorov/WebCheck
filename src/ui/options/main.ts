@@ -21,23 +21,32 @@ log('Starting options page initialization...')
 // Настройка локализации вручную (без компиляции)
 const userLang = navigator.language.split('-')[0] || 'en'
 const messages = { en, ru }
+
+/**
+ * Функция перевода с защитой от ошибок
+ */
 const t = (key) => {
-  if (!key) return '';
-  
-  const langMessages = messages[userLang] || messages.en
-  const keys = key.split('.')
-  let result = langMessages
-  
-  // Перемещение по вложенным ключам
-  for (const k of keys) {
-    if (result && typeof result === 'object' && k in result) {
-      result = result[k]
-    } else {
-      return key // Возвращаем ключ, если не найден
+  try {
+    if (!key) return '';
+    
+    const langMessages = messages[userLang] || messages.en
+    const keys = key.split('.')
+    let result = langMessages
+    
+    // Перемещение по вложенным ключам
+    for (const k of keys) {
+      if (result && typeof result === 'object' && k in result) {
+        result = result[k]
+      } else {
+        return key // Возвращаем ключ, если не найден
+      }
     }
+    
+    return typeof result === 'string' ? result : key
+  } catch (err) {
+    console.error('[OPTIONS] Translation error:', err)
+    return key || ''
   }
-  
-  return typeof result === 'string' ? result : key
 }
 
 // ВАЖНО: Добавляем функцию перевода глобально перед созданием приложения
