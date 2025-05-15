@@ -18,6 +18,7 @@
   let overlayElement = null;
   let overlayInfo = null;
   let isActive = true;
+  let selectionCompleted = false;
   
   // Создаем стиль для выделения элементов
   const style = document.createElement('style');
@@ -138,7 +139,7 @@
   
   // Функция обработки перемещения мыши
   function handleMouseOver(event) {
-    if (!isActive) return;
+    if (!isActive || selectionCompleted) return;
     
     // Игнорируем наши собственные элементы
     if (event.target.closest('.webcheck-overlay')) return;
@@ -159,9 +160,89 @@
     event.stopPropagation();
   }
   
+  // Функция обработки клика
+  function handleClick(event) {
+    if (!isActive || selectionCompleted) return;
+    
+    // Игнорируем клики на наших собственных элементах
+    if (event.target.closest('.webcheck-overlay')) return;
+    
+    // Предотвращаем выполнение действий по умолчанию и всплытие события
+    event.preventDefault();
+    event.stopPropagation();
+    
+    console.log('[WebCheck:ElementSelector] Click detected on element:', event.target);
+    
+    // Если клик произошел по выделенному элементу, выбираем его
+    if (event.target === currentElement) {
+      selectCurrentElement();
+    } else {
+      // Если клик произошел по другому элементу, сначала делаем его текущим
+      if (currentElement) {
+        currentElement.classList.remove('webcheck-highlight');
+      }
+      
+      currentElement = event.target;
+      currentElement.classList.add('webcheck-highlight');
+      
+      // Обновляем информацию
+      updateInfo(currentElement);
+      
+      // Выбираем элемент сразу после клика
+      setTimeout(selectCurrentElement, 100);
+    }
+  }
+
+  // Тихая функция очистки - без отправки сообщения об отмене
+  function quietCleanup() {
+    console.log('[WebCheck:ElementSelector] Quiet cleanup...');
+    
+    // Деактивируем селектор
+    isActive = false;
+    window.__webCheckElementSelectorActive = false;
+    
+    // Удаляем обработчики событий
+    document.removeEventListener('mouseover', handleMouseOver, true);
+    document.removeEventListener('click', handleClick, true);
+    document.removeEventListener('keydown', handleKeydown);
+    
+    // Удаляем выделение
+    if (currentElement) {
+      currentElement.classList.remove('webcheck-highlight');
+      currentElement = null;
+    }
+    
+    // Удаляем оверлей
+    if (overlayElement) {
+      document.body.removeChild(overlayElement);
+      overlayElement = null;
+      overlayInfo = null;
+    }
+    
+    // Удаляем глобальную функцию очистки
+    delete window.__webCheckCleanupSelector;
+  }
+  
   // Функция выбора текущего элемента
   function selectCurrentElement() {
-    if (!currentElement || !isActive) return;
+    if (!currentElement || !isActive || selectionCompleted) return;
+    
+    console.log('[WebCheck:ElementSelector] Selecting element:', currentElement);
+    
+    // Устанавливаем флаг, что выбор выполнен
+    selectionCompleted = true;
+    
+    // Устанавливаем флаг на document для проверки в cleanup
+    document.webCheckElementSelected = true;
+    
+    // Отчетливый визуальный сигнал о выборе
+    currentElement.classList.remove('webcheck-highlight');
+    currentElement.classList.add('webcheck-highlight');
+    
+    // Обновляем информационную панель
+    if (overlayInfo) {
+      overlayInfo.innerHTML = `<strong>Элемент выбран!</strong><br>Обрабатываем...`;
+    }
     
     // Генерируем селектор
     const selector = generateSelector(currentElement);
@@ -192,12 +273,17 @@
     chrome.runtime.sendMessage({
       action: 'elementSelected',
       elementInfo
+    }, response => {
+      console.log('[WebCheck:ElementSelector] Response from background:', response);
+      
+      // Тихая очистка без отправки сообщения об отмене
+      quietCleanup();
     });
     
-    console.log('[WebCheck:ElementSelector] Element selected:', selector);
+    console.log('[WebCheck:ElementSelector] Element selected with selector:', selector);
     
-    // Завершаем работу селектора
-    cleanup();
+    // На случай, если ответ не придет, устанавливаем таймаут на очистку
+    setTimeout(quietCleanup, 1000);
   }
   
   // Получаем URL иконки сайта
@@ -275,6 +361,8 @@
     
     // Удаляем обработчики событий
     document.removeEventListener('mouseover', handleMouseOver, true);
+    document.removeEventListener('click', handleClick, true);
+    document.removeEventListener('keydown', handleKeydown);
     
     // Удаляем выделение
     if (currentElement) {
@@ -293,30 +381,38 @@
     if (!document.webCheckElementSelected) {
       chrome.runtime.sendMessage({
         action: 'elementSelectionCancelled'
+      }, response => {
+        console.log('[WebCheck:ElementSelector] Response from background after cancellation:', response);
       });
     }
+    
+    // Сбрасываем флаг выбора элемента
+    document.webCheckElementSelected = false;
     
     // Удаляем глобальную функцию очистки
     delete window.__webCheckCleanupSelector;
   }
   
+  // Обработчик нажатия Escape для отмены
+  function handleKeydown(e) {
+    if (e.key === 'Escape' && isActive) {
+      cleanup();
+    }
+  }
+  
   // Устанавливаем глобальные переменные для управления селектором
   window.__webCheckElementSelectorActive = true;
   window.__webCheckCleanupSelector = cleanup;
+  document.webCheckElementSelected = false;
   
   // Создаем оверлей
   createOverlay();
   
   // Устанавливаем обработчики событий
   document.addEventListener('mouseover', handleMouseOver, true);
-  
-  // Добавляем обработчик нажатия Escape для отмены
-  document.addEventListener('keydown', function escHandler(e) {
-    if (e.key === 'Escape' && isActive) {
-      cleanup();
-      document.removeEventListener('keydown', escHandler);
-    }
-  });
+  document.addEventListener('click', handleClick, true);
+  console.log('[WebCheck:ElementSelector] Click event listener added with capture phase (true)');
+  document.addEventListener('keydown', handleKeydown);
   
   // Добавляем обработчик сообщений
   chrome.runtime.onMessage.addListener((message) => {
@@ -326,5 +422,5 @@
     return true;
   });
   
-  console.log('[WebCheck:ElementSelector] Element selector activated');
+  console.log('[WebCheck:ElementSelector] Element selector activated with click support');
 })();

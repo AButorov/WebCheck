@@ -207,8 +207,14 @@ export default defineComponent({
     
     // Обработчик сообщений от background script
     function setupMessageListener() {
-      messageListener = (message) => {
+      messageListener = (message, sender, sendResponse) => {
         console.log('[NewTask] Received message:', message);
+        
+        // Обработка ping-сообщения
+        if (message.action === 'ping') {
+          sendResponse({ status: 'pong' });
+          return true;
+        }
         
         if (message.action === 'elementCaptured') {
           // Элемент успешно выбран и данные получены

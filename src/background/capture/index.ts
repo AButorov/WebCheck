@@ -2,11 +2,19 @@
 
 interface ElementInfo {
   selector: string;
-  rect: DOMRect;
+  rect: {
+    top: number;
+    left: number;
+    width: number;
+    height: number;
+    bottom: number;
+    right: number;
+  };
   html: string;
   pageTitle: string;
   pageUrl: string;
   faviconUrl: string;
+  thumbnailUrl?: string; // Миниатюра может быть предоставлена content script
 }
 
 interface Task {
@@ -43,40 +51,17 @@ async function handleSelectedElement(elementInfo: ElementInfo): Promise<void> {
     
     const tab = tabs[0];
     
-    // Захватываем скриншот вкладки
-    const dataUrl = await chrome.tabs.captureVisibleTab(null, { format: 'png' });
+    // Если thumbnailUrl не предоставлен content script, запрашиваем скриншот
+    let thumbnailUrl = elementInfo.thumbnailUrl;
     
-    // Создаем изображение для последующей обработки
-    const img = document.createElement('img');
-    await new Promise<void>((resolve, reject) => {
-      img.onload = () => resolve();
-      img.onerror = () => reject(new Error('Failed to load captured image'));
-      img.src = dataUrl;
-    });
-    
-    // Создаем canvas для обрезки изображения
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
-    
-    if (!ctx) {
-      throw new Error('Failed to get canvas context');
+    if (!thumbnailUrl) {
+      // Захватываем весь экран и сохраняем URL
+      thumbnailUrl = await chrome.tabs.captureVisibleTab(null, { format: 'png' });
+      
+      // Примечание: мы не можем обрезать изображение здесь, так как Service Worker 
+      // не имеет доступа к DOM API. Будем использовать полный скриншот.
+      console.log('[WebCheck:Background] Using full screenshot as thumbnail');
     }
-    
-    const rect = elementInfo.rect;
-    canvas.width = rect.width;
-    canvas.height = rect.height;
-    
-    // Обрезаем изображение до размеров выбранного элемента
-    ctx.drawImage(
-      img,
-      rect.left, rect.top,
-      rect.width, rect.height,
-      0, 0,
-      rect.width, rect.height
-    );
-    
-    // Получаем обрезанное изображение
-    const croppedDataUrl = canvas.toDataURL('image/png');
     
     // Создаем новую задачу
     const task: Task = {
@@ -90,7 +75,7 @@ async function handleSelectedElement(elementInfo: ElementInfo): Promise<void> {
       interval: await getDefaultInterval(),
       initialHtml: elementInfo.html,
       currentHtml: elementInfo.html,
-      thumbnailUrl: croppedDataUrl,
+      thumbnailUrl: thumbnailUrl,
       lastCheckedAt: Date.now(),
       lastChangedAt: null
     };
@@ -100,14 +85,23 @@ async function handleSelectedElement(elementInfo: ElementInfo): Promise<void> {
     
     // Отправляем сообщение в popup
     try {
-      chrome.runtime.sendMessage({
-        action: 'elementCaptured',
-        task
-      });
-      console.log('[WebCheck:Background] Element captured message sent to popup');
-    } catch (error) {
-      console.warn('[WebCheck:Background] Error sending message to popup (this is normal if popup is closed):', error);
-    }
+    // Проверяем, есть ли слушатели перед отправкой сообщения
+    chrome.runtime.sendMessage({action: 'ping'}, (response) => {
+    // Если есть ответ, значит popup активен
+      const lastError = chrome.runtime.lastError;
+      if (!lastError) {
+          chrome.runtime.sendMessage({
+          action: 'elementCaptured',
+            task
+        });
+        console.log('[WebCheck:Background] Element captured message sent to popup');
+      } else {
+        console.log('[WebCheck:Background] Popup not available, task data saved to storage');
+      }
+    });
+  } catch (error) {
+    console.warn('[WebCheck:Background] Error checking popup status:', error);
+  }
     
     console.log('[WebCheck:Background] Element processing completed successfully');
     
@@ -194,11 +188,20 @@ async function cancelElementSelection(tabId: number): Promise<void> {
   
   // Отправляем сообщение в popup об отмене выбора элемента
   try {
-    chrome.runtime.sendMessage({
-      action: 'elementSelectionCancelled'
+    // Проверяем, есть ли слушатели перед отправкой сообщения
+    chrome.runtime.sendMessage({action: 'ping'}, (response) => {
+      const lastError = chrome.runtime.lastError;
+      if (!lastError) {
+        chrome.runtime.sendMessage({
+          action: 'elementSelectionCancelled'
+        });
+        console.log('[WebCheck:Background] Cancellation message sent to popup');
+      } else {
+        console.log('[WebCheck:Background] Popup not available for cancellation message');
+      }
     });
   } catch (msgError) {
-    console.warn('[WebCheck:Background] Error sending cancellation message to popup:', msgError);
+    console.warn('[WebCheck:Background] Error checking popup status for cancellation:', msgError);
   }
 }
 
@@ -230,6 +233,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   console.log('[WebCheck:Background] Received message:', message.action, 
     sender.tab ? `from tab ${sender.tab.id}` : 'from extension');
   
+  // Обработка ping-сообщения для проверки активности popup
+  if (message.action === 'ping') {
+    sendResponse({ status: 'pong' });
+    return true;
+  }
+  
   // Обработка выбранного элемента
   if (message.action === 'elementSelected') {
     handleSelectedElement(message.elementInfo);
@@ -243,12 +252,20 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     
     // Пересылаем сообщение в popup
     try {
-      chrome.runtime.sendMessage({
-        action: 'elementSelectionCancelled'
+      // Проверяем, есть ли слушатели перед отправкой сообщения
+      chrome.runtime.sendMessage({action: 'ping'}, (response) => {
+        const lastError = chrome.runtime.lastError;
+        if (!lastError) {
+          chrome.runtime.sendMessage({
+            action: 'elementSelectionCancelled'
+          });
+          console.log('[WebCheck:Background] Cancellation message forwarded to popup');
+        } else {
+          console.log('[WebCheck:Background] Popup not available for forwarding cancellation');
+        }
       });
-      console.log('[WebCheck:Background] Cancellation message forwarded to popup');
     } catch (error) {
-      console.warn('[WebCheck:Background] Error forwarding cancellation message (this may be normal):', error);
+      console.warn('[WebCheck:Background] Error checking popup status for forwarded cancellation:', error);
     }
     
     sendResponse({ status: 'cancelled' });
