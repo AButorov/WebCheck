@@ -3,16 +3,16 @@
     <h2 class="text-xl font-bold mb-4">{{ isEdit ? 'Редактирование задачи' : 'Новая задача' }}</h2>
     
     <!-- Миниатюра элемента -->
-    <div class="mb-4">
-      <p class="text-sm text-gray-600 mb-2">Выбранный элемент:</p>
+    <div class="mb-3">
+      <p class="text-sm text-gray-600 mb-1">Выбранный элемент:</p>
       <div class="thumbnail-container border rounded-lg overflow-hidden bg-gray-50">
-        <img 
+        <iframe 
           v-if="task.thumbnailUrl" 
           :src="task.thumbnailUrl" 
-          alt="Предпросмотр элемента" 
-          class="w-full h-auto max-h-32 object-contain"
-        />
-        <div v-else class="bg-gray-100 w-full h-32 flex items-center justify-center text-gray-400">
+          frameborder="0" 
+          class="w-full h-24 object-contain"
+        ></iframe>
+        <div v-else class="bg-gray-100 w-full h-24 flex items-center justify-center text-gray-400">
           Изображение недоступно
         </div>
       </div>
@@ -21,7 +21,7 @@
     <!-- Форма редактирования -->
     <form @submit.prevent="saveTask">
       <!-- Название задачи -->
-      <div class="mb-4">
+      <div class="mb-3">
         <label class="block text-sm font-medium text-gray-700 mb-1">Название задачи</label>
         <input 
           v-model="editedTask.title" 
@@ -32,7 +32,7 @@
       </div>
       
       <!-- Источник (сайт) -->
-      <div class="mb-4">
+      <div class="mb-3">
         <label class="block text-sm font-medium text-gray-700 mb-1">Источник</label>
         <div class="flex items-center border border-gray-300 rounded-md px-3 py-2">
           <img 
@@ -46,7 +46,7 @@
       </div>
       
       <!-- Частота проверок -->
-      <div class="mb-6">
+      <div class="mb-4">
         <label class="block text-sm font-medium text-gray-700 mb-1">Частота проверок</label>
         <select 
           v-model="editedTask.interval" 
@@ -60,7 +60,7 @@
       </div>
       
       <!-- Информация о селекторе (скрытая, для отладки) -->
-      <div v-if="debug" class="mb-4 p-3 bg-gray-100 rounded text-sm">
+      <div v-if="debug" class="mb-3 p-3 bg-gray-100 rounded text-sm">
         <p class="font-medium">Селектор для отслеживания:</p>
         <code class="block mt-1 text-xs bg-gray-200 p-2 rounded">{{ task.selector }}</code>
       </div>

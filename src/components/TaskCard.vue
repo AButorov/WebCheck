@@ -18,7 +18,7 @@
       </div>
       
       <div class="flex-grow mr-20">
-        <h3 class="text-xl font-bold mb-1 truncate">{{ task.title }}</h3>
+        <h3 class="text-xl font-bold mb-1 truncate max-w-[230px]" :title="task.title">{{ task.title }}</h3>
         <div class="flex items-center text-base text-gray-600">
           <img 
             :src="task.faviconUrl || '/icons/icon-16.png'" 
@@ -26,7 +26,7 @@
             class="w-5 h-5 mr-1.5"
             @error="onFaviconError"
           />
-          <a :href="task.url" target="_blank" class="hover:underline truncate">{{ displayUrl }}</a>
+          <a :href="task.url" target="_blank" class="hover:underline truncate max-w-[200px]" :title="task.url">{{ displayUrl }}</a>
         </div>
       </div>
       
@@ -94,13 +94,11 @@
         </svg>
       </button>
       
-      <!-- Кнопка просмотра изменений -->
+      <!-- Кнопка просмотра элемента -->
       <button 
-        class="rounded-full p-2"
-        :class="viewButtonClass"
-        :disabled="task.status !== 'changed'"
+        class="text-white bg-[#673ab7] hover:bg-purple-700 rounded-full p-2"
         @click="emit('view', task.id)"
-        :title="task.status === 'changed' ? 'Просмотр изменений' : 'Нет изменений для просмотра'"
+        title="Просмотр элемента"
       >
         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
           <path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd" />
@@ -184,14 +182,6 @@ export default defineComponent({
         case 'paused':
           return 'text-[#9e9e9e] border-[#9e9e9e]'
       }
-    })
-    
-    // Определение классов для кнопки просмотра в зависимости от статуса
-    const viewButtonClass = computed(() => {
-      if (props.task.status === 'changed') {
-        return 'text-white bg-[#673ab7] hover:bg-purple-700'
-      }
-      return 'text-white bg-gray-400 cursor-not-allowed opacity-50'
     })
     
     // Классы для карточки
@@ -299,7 +289,6 @@ export default defineComponent({
       checkboxClass,
       cardClasses,
       progressClass,
-      viewButtonClass,
       remainingTimePercent,
       remainingTimeText,
       statusTitle,

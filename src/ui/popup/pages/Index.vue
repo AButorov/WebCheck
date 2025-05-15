@@ -48,16 +48,21 @@
     </div>
     
     <!-- Пустой список задач -->
-    <div v-else-if="tasks.length === 0" class="flex flex-col items-center justify-center h-64 text-gray-400">
+    <div v-else-if="tasks.length === 0" class="flex flex-col items-center justify-center h-96 text-gray-400">
       <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 mb-4 text-gray-300" viewBox="0 0 20 20" fill="currentColor">
         <path fill-rule="evenodd" d="M5 4a3 3 0 00-3 3v6a3 3 0 003 3h10a3 3 0 003-3V7a3 3 0 00-3-3H5zm0 2a1 1 0 00-1 1v6a1 1 0 001 1h10a1 1 0 001-1V7a1 1 0 00-1-1H5z" clip-rule="evenodd" />
       </svg>
-      <p class="text-lg mb-4">Нет активных задач.</p>
+      <p class="text-lg mb-6">Нет активных задач.</p>
       <button 
-        class="bg-[#3e66fb] text-white px-4 py-2 rounded hover:bg-blue-700 transition-colors"
+        class="bg-[#3e66fb] text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors text-lg font-medium"
         @click="handleAddTask"
       >
-        Добавить задачу
+        <span class="flex items-center">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clip-rule="evenodd" />
+          </svg>
+          Добавить задачу
+        </span>
       </button>
     </div>
     
@@ -121,20 +126,17 @@ export default defineComponent({
         // Загрузка из хранилища
         const result = await browser.storage.local.get('tasks')
         
-        if (result.tasks && Array.isArray(result.tasks) && result.tasks.length > 0) {
+        if (result.tasks && Array.isArray(result.tasks)) {
           console.log('Tasks loaded:', result.tasks)
           tasks.value = result.tasks
         } else {
-          console.log('No tasks found, generating demo tasks')
-          tasks.value = generateDemoTasks()
-          await saveTasks()
+          console.log('No tasks found')
+          tasks.value = []
         }
       } catch (err) {
         console.error('Error loading tasks:', err)
         error.value = 'Не удалось загрузить задачи: ' + (err.message || 'Неизвестная ошибка')
-        
-        // Fallback to demo data
-        tasks.value = generateDemoTasks()
+        tasks.value = []
       } finally {
         loading.value = false
       }
@@ -149,59 +151,6 @@ export default defineComponent({
         console.error('Error saving tasks:', err)
         error.value = 'Не удалось сохранить задачи'
       }
-    }
-    
-    // Демо-задачи
-    function generateDemoTasks() {
-      console.log('Generating demo tasks')
-      const now = Date.now()
-      const hourAgo = now - 60 * 60 * 1000
-      const dayAgo = now - 24 * 60 * 60 * 1000
-      
-      return [
-        {
-          id: generateId(),
-          title: 'Цена на iPhone 15 Pro',
-          url: 'https://www.apple.com/ru/iphone-15-pro/',
-          faviconUrl: 'https://www.apple.com/favicon.ico',
-          selector: '.price-point',
-          createdAt: dayAgo,
-          status: 'changed',
-          interval: '1h',
-          initialHtml: '<div class="price-point">89 990 ₽</div>',
-          currentHtml: '<div class="price-point">85 990 ₽</div>',
-          lastCheckedAt: hourAgo,
-          lastChangedAt: hourAgo,
-        },
-        {
-          id: generateId(),
-          title: 'Курс Bitcoin на Binance',
-          url: 'https://www.binance.com/ru/price/bitcoin',
-          faviconUrl: 'https://public.bnbstatic.com/static/images/common/favicon.ico',
-          selector: '.price-value',
-          createdAt: dayAgo,
-          status: 'unchanged',
-          interval: '15m',
-          initialHtml: '<div class="price-value">$60,245.32</div>',
-          currentHtml: '<div class="price-value">$60,245.32</div>',
-          lastCheckedAt: hourAgo - 15 * 60 * 1000,
-          lastChangedAt: null,
-        },
-        {
-          id: generateId(),
-          title: 'Наличие PS5 в DNS',
-          url: 'https://www.dns-shop.ru/product/fd5650d1c517ed20/igrovaa-konsol-sony-playstation-5/',
-          faviconUrl: 'https://www.dns-shop.ru/favicon.ico',
-          selector: '.availability-text',
-          createdAt: dayAgo,
-          status: 'paused',
-          interval: '3h',
-          initialHtml: '<div class="availability-text">Нет в наличии</div>',
-          currentHtml: '<div class="availability-text">Нет в наличии</div>',
-          lastCheckedAt: dayAgo,
-          lastChangedAt: null,
-        }
-      ]
     }
     
     // Генерация уникального ID

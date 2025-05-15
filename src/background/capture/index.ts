@@ -83,7 +83,20 @@ async function handleSelectedElement(elementInfo: ElementInfo): Promise<void> {
     // Сохраняем данные для последующего редактирования
     await chrome.storage.local.set({ newTaskData: task });
     
-    // Отправляем сообщение в popup
+    // Показываем уведомление в Chrome
+    try {
+      await chrome.notifications.create({
+        type: 'basic',
+        iconUrl: chrome.runtime.getURL('icons/icon-128.png'),
+        title: 'Элемент успешно выбран',
+        message: 'Нажмите на иконку расширения, чтобы продолжить',
+      });
+      console.log('[WebCheck:Background] Notification shown to user');
+    } catch (notificationError) {
+      console.warn('[WebCheck:Background] Failed to show notification:', notificationError);
+    }
+    
+    // Пытаемся отправить сообщение в popup
     try {
     // Проверяем, есть ли слушатели перед отправкой сообщения
     chrome.runtime.sendMessage({action: 'ping'}, (response) => {

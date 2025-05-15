@@ -1,6 +1,6 @@
 <template>
-  <div class="min-h-[500px] w-[380px] p-3">
-    <header class="flex justify-between items-center mb-6 pb-2 border-b">
+  <div class="min-h-[500px] w-[380px] h-[420px] p-3 overflow-y-auto">
+    <header class="flex justify-between items-center mb-6 pb-2 border-b sticky top-0 bg-white z-10">
       <div class="flex items-center">
         <h1 class="text-2xl font-bold">Новая задача</h1>
       </div>
@@ -106,6 +106,9 @@ export default defineComponent({
           // Данные о задаче ещё не получены, сохраняем флаг выбора элемента
           elementSelection.value = true;
           console.log('[NewTask] Waiting for element selection');
+          
+          // Если данных нет, активируем выбор элемента
+          activateElementSelection();
         }
       } catch (err) {
         console.error('[NewTask] Error loading task data:', err);
@@ -128,6 +131,13 @@ export default defineComponent({
         
         activeTabId.value = tab.id;
         console.log('[NewTask] Activating element selection on tab:', tab.id);
+        
+        // Активируем вкладку и окно перед отправкой сообщения
+        await browser.tabs.update(tab.id, { active: true });
+        await browser.windows.update(tab.windowId, { focused: true });
+        
+        // Небольшая задержка для гарантированной активации вкладки
+        await new Promise(resolve => setTimeout(resolve, 100));
         
         // Отправляем сообщение в background script для активации выбора элемента
         await browser.runtime.sendMessage({
@@ -249,10 +259,8 @@ export default defineComponent({
       // Загружаем данные о задаче, если они есть
       loadTaskData();
       
-      // Если данных нет, активируем выбор элемента
-      if (elementSelection.value) {
-        activateElementSelection();
-      }
+      // Не активируем выбор элемента автоматически
+      // Это будет сделано внутри loadTaskData, если данные не найдены
     });
     
     // Очистка при размонтировании компонента

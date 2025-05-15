@@ -252,33 +252,195 @@
     const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
     const scrollLeft = window.pageXOffset || document.documentElement.scrollLeft;
     
-    // Создаем объект с информацией о выбранном элементе
-    const elementInfo = {
-      selector,
-      rect: {
-        top: rect.top + scrollTop,
-        left: rect.left + scrollLeft,
-        width: rect.width,
-        height: rect.height,
-        bottom: rect.bottom + scrollTop,
-        right: rect.right + scrollLeft
-      },
-      html: currentElement.outerHTML,
-      pageTitle: document.title,
-      pageUrl: window.location.href,
-      faviconUrl: getFaviconUrl()
-    };
+    // Создаем скриншот выбранного элемента
+    // В реальном приложении лучше использовать html2canvas или другую библиотеку
+    let dataUrl = null;
     
-    // Отправляем информацию в расширение
-    chrome.runtime.sendMessage({
-      action: 'elementSelected',
-      elementInfo
-    }, response => {
-      console.log('[WebCheck:ElementSelector] Response from background:', response);
+    try {
+      // Попытаемся создать скриншот с помощью canvas
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
       
-      // Тихая очистка без отправки сообщения об отмене
-      quietCleanup();
-    });
+      // Получаем размеры и позицию элемента
+      const elementRect = currentElement.getBoundingClientRect();
+      canvas.width = elementRect.width;
+      canvas.height = elementRect.height;
+      
+      // Создаем временный светлый фон
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      
+      // Попытка использовать foreignObject для отрисовки HTML содержимого
+      // Это не идеальное решение, но может работать в некоторых случаях
+      // В реальном приложении мы бы использовали html2canvas или аналогичную библиотеку
+      try {
+        // Создаем свойство backgroundImage с помощью DOM API
+        const serializer = new XMLSerializer();
+        const elementXML = serializer.serializeToString(currentElement);
+        const DOMURL = window.URL || window.webkitURL || window;
+        const img = new Image();
+        const svgBlob = new Blob([`
+          <svg xmlns="http://www.w3.org/2000/svg" width="${elementRect.width}" height="${elementRect.height}">
+            <foreignObject width="100%" height="100%" x="0" y="0">
+              ${elementXML}
+            </foreignObject>
+          </svg>
+        `], {type: 'image/svg+xml;charset=utf-8'});
+        const url = DOMURL.createObjectURL(svgBlob);
+        
+        // Загрузка изображения и рисование на canvas
+        img.onload = function() {
+          ctx.drawImage(img, 0, 0);
+          DOMURL.revokeObjectURL(url);
+          dataUrl = canvas.toDataURL('image/png');
+          console.log('[WebCheck:ElementSelector] Element screenshot created');
+        };
+        img.src = url;
+      } catch (e) {
+        console.error('[WebCheck:ElementSelector] Error creating SVG screenshot:', e);
+      }
+      
+      // Даем немного времени для загрузки изображения
+      setTimeout(() => {
+        // Если не удалось создать скриншот, используем HTML-версию
+        if (!dataUrl) {
+          console.log('[WebCheck:ElementSelector] Using HTML version as fallback');
+          dataUrl = 'data:text/html,' + encodeURIComponent(`
+            <html>
+              <head>
+                <style>
+                  body {
+                    margin: 0;
+                    padding: 0;
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                    height: 100vh;
+                  }
+                  .element-container {
+                    max-width: 100%;
+                    max-height: 100%;
+                    overflow: auto;
+                  }
+                </style>
+              </head>
+              <body>
+                <div class="element-container">${currentElement.outerHTML}</div>
+              </body>
+            </html>
+          `);
+        }
+        
+        // Создаем объект с информацией о выбранном элементе
+        const elementInfo = {
+          selector,
+          rect: {
+            top: rect.top + scrollTop,
+            left: rect.left + scrollLeft,
+            width: rect.width,
+            height: rect.height,
+            bottom: rect.bottom + scrollTop,
+            right: rect.right + scrollLeft
+          },
+          html: currentElement.outerHTML,
+          pageTitle: document.title,
+          pageUrl: window.location.href,
+          faviconUrl: getFaviconUrl(),
+          // Сохраняем dataUrl для миниатюры
+          thumbnailUrl: dataUrl
+        };
+        
+        // Отправляем информацию в расширение
+        chrome.runtime.sendMessage({
+          action: 'elementSelected',
+          elementInfo
+        }, response => {
+          console.log('[WebCheck:ElementSelector] Response from background:', response);
+          
+          // Тихая очистка без отправки сообщения об отмене
+          quietCleanup();
+          
+          // Показываем уведомление пользователю
+          try {
+            const notificationElement = document.createElement('div');
+            notificationElement.className = 'webcheck-notification';
+            notificationElement.innerHTML = `
+              <div class="webcheck-notification-content">
+                <div class="webcheck-notification-icon">✅</div>
+                <div class="webcheck-notification-text">
+                  <div class="webcheck-notification-title">Элемент успешно выбран!</div>
+                  <div class="webcheck-notification-message">Нажмите на иконку расширения, чтобы продолжить.</div>
+                </div>
+              </div>
+            `;
+            
+            // Стили для уведомления
+            const notificationStyle = document.createElement('style');
+            notificationStyle.textContent = `
+              .webcheck-notification {
+                position: fixed;
+                bottom: 20px;
+                right: 20px;
+                z-index: 2147483647;
+                background-color: white;
+                border-radius: 8px;
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+                padding: 16px;
+                max-width: 300px;
+                animation: webcheck-slide-in 0.3s ease-out;
+              }
+              
+              @keyframes webcheck-slide-in {
+                from { transform: translateX(100%); opacity: 0; }
+                to { transform: translateX(0); opacity: 1; }
+              }
+              
+              .webcheck-notification-content {
+                display: flex;
+                align-items: flex-start;
+              }
+              
+              .webcheck-notification-icon {
+                font-size: 24px;
+                margin-right: 12px;
+              }
+              
+              .webcheck-notification-text {
+                flex: 1;
+              }
+              
+              .webcheck-notification-title {
+                font-weight: bold;
+                margin-bottom: 4px;
+                font-size: 16px;
+              }
+              
+              .webcheck-notification-message {
+                font-size: 14px;
+                color: #666;
+              }
+            `;
+            
+            document.head.appendChild(notificationStyle);
+            document.body.appendChild(notificationElement);
+            
+            // Удаляем уведомление через 5 секунд
+            setTimeout(() => {
+              if (document.body.contains(notificationElement)) {
+                document.body.removeChild(notificationElement);
+              }
+              if (document.head.contains(notificationStyle)) {
+                document.head.removeChild(notificationStyle);
+              }
+            }, 5000);
+          } catch (e) {
+            console.error('[WebCheck:ElementSelector] Error showing notification:', e);
+          }
+        });
+      }, 200); // Даем время для загрузки изображения
+    } catch (e) {
+      console.error('[WebCheck:ElementSelector] Error creating element thumbnail:', e);
+    }
     
     console.log('[WebCheck:ElementSelector] Element selected with selector:', selector);
     

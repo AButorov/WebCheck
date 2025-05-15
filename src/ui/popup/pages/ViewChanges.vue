@@ -1,6 +1,6 @@
 <template>
   <div class="bg-white w-full min-h-[500px] w-[400px]">
-    <!-- Шапка экрана просмотра изменений -->
+    <!-- Шапка экрана просмотра элемента -->
     <header class="flex items-center p-4 border-b">
       <button 
         class="mr-2 text-gray-600 hover:text-gray-900"
@@ -76,18 +76,20 @@
       <div class="grid grid-cols-2 gap-4 mb-4">
         <!-- Левая панель (исходный вид) -->
         <div class="border border-gray-200 rounded overflow-hidden shadow-sm">
-          <div 
-            class="p-3 max-h-64 overflow-auto text-sm diff-panel"
-            v-html="task.initialHtml"
-          ></div>
+          <iframe 
+            :srcdoc="wrapHtmlWithStyle(task.initialHtml)" 
+            class="w-full h-64"
+            frameborder="0"
+          ></iframe>
         </div>
         
         <!-- Правая панель (текущий вид) -->
         <div class="border border-gray-200 rounded overflow-hidden shadow-sm">
-          <div 
-            class="p-3 max-h-64 overflow-auto text-sm diff-panel"
-            v-html="task.currentHtml"
-          ></div>
+          <iframe 
+            :srcdoc="wrapHtmlWithStyle(task.currentHtml)" 
+            class="w-full h-64"
+            frameborder="0"
+          ></iframe>
         </div>
       </div>
       
@@ -132,7 +134,7 @@ export default defineComponent({
     })
     
     // Вычисляемые свойства
-    const taskTitle = computed(() => task.value?.title || 'Просмотр изменений')
+    const taskTitle = computed(() => task.value?.title || 'Просмотр элемента')
     const taskUrl = computed(() => task.value?.url || '#')
     const displayUrl = computed(() => {
       if (!task.value?.url) return ''
@@ -151,6 +153,31 @@ export default defineComponent({
       
       const date = new Date(timestamp)
       return date.toLocaleString()
+    }
+    
+    // Форматирование HTML для отображения
+    function wrapHtmlWithStyle(html) {
+      return `
+        <html>
+          <head>
+            <style>
+              body {
+                margin: 0;
+                padding: 10px;
+                font-family: Arial, sans-serif;
+                font-size: 14px;
+              }
+              .element-container {
+                max-width: 100%;
+                overflow: auto;
+              }
+            </style>
+          </head>
+          <body>
+            <div class="element-container">${html || '<div>(Нет содержимого)</div>'}</div>
+          </body>
+        </html>
+      `;
     }
     
     // Загрузка задач
@@ -228,6 +255,7 @@ export default defineComponent({
       taskUrl,
       displayUrl,
       formatDate,
+      wrapHtmlWithStyle,
       goBack,
       resetChanges
     }
