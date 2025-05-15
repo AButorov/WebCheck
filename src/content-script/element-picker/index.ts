@@ -11,11 +11,22 @@ interface ElementInfo {
   faviconUrl: string;
 }
 
+// Глобальные переменные для предотвращения множественной инициализации
+let isPickerInitialized = false;
+let targetElement = null;
+let overlay = null;
+let isPickerActive = false;
+
 // Главная функция для инициализации выбора элементов
 function initElementPicker() {
-  let targetElement = null;
-  let overlay = null;
-  let isPickerActive = false;
+  // Предотвращаем повторную инициализацию
+  if (isPickerInitialized) {
+    console.log('[WebCheck] Element picker already initialized, skipping initialization');
+    return;
+  }
+  
+  isPickerInitialized = true;
+  console.log('[WebCheck] Element capture module initialized');
   
   // Создаем стили для выделения элементов
   const style = document.createElement('style');
@@ -109,6 +120,11 @@ function initElementPicker() {
   
   // Функция для создания интерфейса управления
   function createOverlay() {
+    // Если оверлей уже существует, не создаем новый
+    if (document.querySelector('.webcheck-overlay')) {
+      return;
+    }
+    
     overlay = document.createElement('div');
     overlay.className = 'webcheck-overlay';
     
@@ -390,6 +406,12 @@ function initElementPicker() {
   
   // Активация выбора элемента
   function activatePicker() {
+    // Если выбор элементов уже активен, не активируем повторно
+    if (isPickerActive) {
+      console.log('[WebCheck] Element picker already active');
+      return;
+    }
+    
     isPickerActive = true;
     createOverlay();
     document.addEventListener('mouseover', handleMouseOver, true);
@@ -414,17 +436,31 @@ function initElementPicker() {
     document.removeEventListener('click', handleClick, true);
   }
   
-  // Обработчик сообщений от background script
-  chrome.runtime.onMessage.addListener((message) => {
+  // Обработчик сообщений от background script или popup
+  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    console.log('[WebCheck] Received message:', message.action);
+    
     if (message.action === 'activateElementPicker') {
       activatePicker();
+      sendResponse({ status: 'activated' });
+      return true;
+    }
+    
+    if (message.action === 'cancelElementSelection') {
+      deactivatePicker();
+      sendResponse({ status: 'cancelled' });
+      return true;
+    }
+    
+    if (message.action === 'ping') {
+      sendResponse({ status: 'pong' });
       return true;
     }
   });
 }
 
-// При загрузке скрипта печатаем в консоль
-console.log('[WebCheck] Element picker loaded');
-
 // Инициализация модуля
 initElementPicker();
+
+// При загрузке скрипта печатаем в консоль
+console.log('[WebCheck] Element picker loaded');

@@ -2,9 +2,12 @@ import browser from 'webextension-polyfill'
 import { onMessage, sendMessage } from 'webext-bridge/content-script'
 import { MessagePayloads } from '~/types/messages'
 
-// Отслеживаем активацию селектора элементов
+// Показываем, что скрипт загружен
+console.log('[WebCheck:ContentScript] Content script loaded and ready');
+
+// Отслеживаем активацию селектора элементов (для обратной совместимости)
 onMessage('activate-selector', async () => {
-  console.log('Element selector activated')
+  console.log('[WebCheck:ContentScript] Element selector activated via bridge');
   
   // Включаем режим выбора элемента
   activateElementSelector()
@@ -12,6 +15,13 @@ onMessage('activate-selector', async () => {
 
 // Функция для активации селектора элементов
 function activateElementSelector() {
+  // Проверяем, не активировался ли уже модуль picker
+  const pickerActive = document.querySelector('.webcheck-overlay');
+  if (pickerActive) {
+    console.log('[WebCheck:ContentScript] Picker overlay already exists, not initializing again');
+    return;
+  }
+  
   // Текущий выбранный элемент
   let selectedElement: Element | null = null
   let hoveredElement: Element | null = null
@@ -85,20 +95,50 @@ function activateElementSelector() {
       // Генерируем CSS-селектор для выбранного элемента
       const selector = generateSelector(selectedElement)
       
-      // Отправляем информацию в фоновый скрипт
-      sendMessage('element-selected', {
+      // Создаем объект с информацией об элементе
+      const elementInfo = {
         selector,
-        html,
-        title: document.title,
-        url: window.location.href,
-        faviconUrl: getFaviconUrl(),
-        position: {
-          top: rect.top,
-          left: rect.left,
+        rect: {
+          top: rect.top + window.scrollY,
+          left: rect.left + window.scrollX,
           width: rect.width,
           height: rect.height,
-        }
-      }, { context: 'popup', tabId: -1 }).catch(console.error)
+          x: rect.x,
+          y: rect.y,
+          bottom: rect.bottom,
+          right: rect.right
+        },
+        html,
+        pageTitle: document.title,
+        pageUrl: window.location.href,
+        faviconUrl: getFaviconUrl()
+      };
+      
+      // Отправляем данные в background script
+      try {
+        chrome.runtime.sendMessage({
+          action: 'captureElement',
+          elementInfo
+        });
+        console.log('[WebCheck:ContentScript] Capture element message sent:', selector);
+      } catch (error) {
+        console.error('[WebCheck:ContentScript] Error sending capture message:', error);
+        
+        // Пробуем отправить через webext-bridge как запасной вариант
+        sendMessage('element-selected', {
+          selector,
+          html,
+          title: document.title,
+          url: window.location.href,
+          faviconUrl: getFaviconUrl(),
+          position: {
+            top: rect.top,
+            left: rect.left,
+            width: rect.width,
+            height: rect.height,
+          }
+        }, { context: 'popup', tabId: -1 }).catch(console.error)
+      }
       
       // Очищаем DOM после выбора
       cleanup()
@@ -113,7 +153,15 @@ function activateElementSelector() {
     instructions.remove()
     
     // Сообщаем, что выбор был отменен
-    sendMessage('element-selection-cancelled', null, { context: 'popup', tabId: -1 }).catch(console.error)
+    try {
+      chrome.runtime.sendMessage({ action: 'cancelElementSelection' });
+      console.log('[WebCheck:ContentScript] Cancel element selection message sent');
+    } catch (error) {
+      console.error('[WebCheck:ContentScript] Error sending cancellation message:', error);
+      
+      // Пробуем отправить через webext-bridge как запасной вариант
+      sendMessage('element-selection-cancelled', null, { context: 'popup', tabId: -1 }).catch(console.error)
+    }
   }
   
   // Получение URL иконки сайта
@@ -186,3 +234,36 @@ onMessage('check-element', async (message) => {
     error: 'Element not found',
   }
 })
+
+// Обработчик сообщений от background script и popup
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  console.log('[WebCheck:ContentScript] Received message:', message.action);
+  
+  // Обработка ping-сообщения для проверки доступности content script
+  if (message.action === 'ping') {
+    console.log('[WebCheck:ContentScript] Ping received, sending pong');
+    sendResponse({ status: 'pong' });
+    return true;
+  }
+  
+  // Перенаправление к activateElementPicker в element-picker, если он есть
+  if (message.action === 'activateElementPicker') {
+    console.log('[WebCheck:ContentScript] Received activateElementPicker message, redirecting to element-picker');
+    // В основном content_script не активируем выбор элемента,
+    // т.к. эта функциональность должна быть в element-picker/index.js
+    // но делаем резервную обработку
+    if (window.hasOwnProperty('initElementPicker')) {
+      console.log('[WebCheck:ContentScript] element-picker already available');
+      sendResponse({ status: 'already_initialized' });
+    } else {
+      console.log('[WebCheck:ContentScript] Fallback to built-in picker');
+      activateElementSelector();
+      sendResponse({ status: 'activated_fallback' });
+    }
+    return true;
+  }
+  
+  return false; // Не обрабатываем другие сообщения
+});
+
+console.log('[WebCheck:ContentScript] Core content script initialized');

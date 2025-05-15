@@ -41,7 +41,7 @@
       <p class="text-blue-600 text-sm mb-4">Наведите курсор на интересующий вас элемент и кликните на него.</p>
       <button 
         class="text-[#2d6cdf] hover:underline mt-2"
-        @click="goBack"
+        @click="cancelSelection"
       >
         Отменить
       </button>
@@ -59,7 +59,7 @@
 </template>
 
 <script>
-import { defineComponent, ref, computed, onMounted } from 'vue'
+import { defineComponent, ref, onMounted, onUnmounted } from 'vue'
 import TaskEditor from '~/components/TaskEditor.vue'
 import browser from 'webextension-polyfill'
 
@@ -77,6 +77,8 @@ export default defineComponent({
     const error = ref(null)
     const elementSelection = ref(true) // По умолчанию показываем уведомление о выборе элемента
     const debug = ref(false)
+    const activeTabId = ref(null)
+    let messageListener = null
     
     // Проверяем наличие флага отладки
     if (import.meta.env.MODE === 'development') {
@@ -99,7 +101,7 @@ export default defineComponent({
           // Удаляем данные из storage, так как они больше не нужны
           await browser.storage.local.remove('newTaskData');
           
-          console.log('[NewTask] Task data loaded:', task.value);
+          console.log('[TaskEditor] Task data loaded:', task.value);
         } else {
           // Данные о задаче ещё не получены, сохраняем флаг выбора элемента
           elementSelection.value = true;
@@ -117,36 +119,50 @@ export default defineComponent({
     // Активация выбора элемента на странице
     async function activateElementSelection() {
       try {
+        // Получаем активную вкладку
         const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
         
-        if (tab) {
-          console.log('[NewTask] Injecting element picker into tab:', tab.id);
-          
-          // Сначала инжектируем скрипт с помощью executeScript
-          await chrome.scripting.executeScript({
-            target: { tabId: tab.id },
-            files: ['content-script/element-picker/index.js']
-          });
-          
-          // Задержка, чтобы скрипт успел загрузиться
-          await new Promise(resolve => setTimeout(resolve, 500));
-          
-          // Теперь отправляем сообщение для активации выбора элемента
-          await browser.tabs.sendMessage(tab.id, {
-            action: 'activateElementPicker'
-          });
-          
-          // Показываем уведомление о выборе элемента
-          elementSelection.value = true;
-        } else {
-          error.value = 'Не удалось получить активную вкладку';
-          elementSelection.value = false;
+        if (!tab) {
+          throw new Error('Не удалось получить активную вкладку');
         }
+        
+        activeTabId.value = tab.id;
+        console.log('[NewTask] Activating element selection on tab:', tab.id);
+        
+        // Отправляем сообщение в background script для активации выбора элемента
+        await browser.runtime.sendMessage({
+          action: 'activateElementSelection',
+          tabId: tab.id
+        });
+        
+        // Показываем уведомление о выборе элемента
+        elementSelection.value = true;
+        console.log('[NewTask] Element selection activation request sent');
       } catch (err) {
-        console.error('[NewTask] Error activating element picker:', err);
+        console.error('[NewTask] Error activating element selection:', err);
         error.value = 'Не удалось активировать выбор элемента: ' + (err.message || 'Неизвестная ошибка');
         elementSelection.value = false;
       }
+    }
+    
+    // Отмена выбора элемента
+    async function cancelSelection() {
+      try {
+        if (activeTabId.value) {
+          console.log('[NewTask] Cancelling element selection on tab:', activeTabId.value);
+          
+          // Отправляем сообщение в background script для отмены выбора элемента
+          await browser.runtime.sendMessage({
+            action: 'cancelElementSelection',
+            tabId: activeTabId.value
+          });
+        }
+      } catch (err) {
+        console.error('[NewTask] Error cancelling element selection:', err);
+      }
+      
+      // Возвращаемся на главную страницу
+      goBack();
     }
     
     // Сохранение задачи
@@ -191,25 +207,39 @@ export default defineComponent({
     
     // Обработчик сообщений от background script
     function setupMessageListener() {
-      browser.runtime.onMessage.addListener((message) => {
+      messageListener = (message) => {
         console.log('[NewTask] Received message:', message);
         
         if (message.action === 'elementCaptured') {
+          // Элемент успешно выбран и данные получены
           task.value = message.task;
           elementSelection.value = false;
           loading.value = false;
         } else if (message.action === 'captureError') {
+          // Ошибка при захвате элемента
           error.value = 'Ошибка при захвате элемента: ' + message.error;
           elementSelection.value = false;
           loading.value = false;
         } else if (message.action === 'elementSelectionCancelled') {
+          // Отмена выбора элемента
           goBack();
+        } else if (message.action === 'elementSelectionError') {
+          // Ошибка при активации выбора элемента
+          error.value = 'Ошибка при активации выбора элемента: ' + message.error;
+          elementSelection.value = false;
+          loading.value = false;
         }
-      });
+      };
+      
+      browser.runtime.onMessage.addListener(messageListener);
+      return messageListener;
     }
     
     // Загрузка данных при монтировании компонента
     onMounted(() => {
+      // Настраиваем обработчик сообщений
+      setupMessageListener();
+      
       // Загружаем данные о задаче, если они есть
       loadTaskData();
       
@@ -217,9 +247,25 @@ export default defineComponent({
       if (elementSelection.value) {
         activateElementSelection();
       }
+    });
+    
+    // Очистка при размонтировании компонента
+    onUnmounted(() => {
+      if (messageListener) {
+        browser.runtime.onMessage.removeListener(messageListener);
+      }
       
-      // Настраиваем обработчик сообщений
-      setupMessageListener();
+      if (activeTabId.value && elementSelection.value) {
+        // Пытаемся отменить выбор элемента при закрытии страницы
+        try {
+          browser.runtime.sendMessage({
+            action: 'cancelElementSelection',
+            tabId: activeTabId.value
+          }).catch(() => {});
+        } catch (e) {
+          // Игнорируем ошибки при отмене
+        }
+      }
     });
     
     return {
@@ -229,7 +275,8 @@ export default defineComponent({
       elementSelection,
       debug,
       saveTask,
-      goBack
+      goBack,
+      cancelSelection
     };
   }
 });

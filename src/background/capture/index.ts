@@ -25,13 +25,16 @@ interface Task {
   lastChangedAt: number | null;
 }
 
+// Переменная для отслеживания состояния выбора элемента
+let elementSelectionActive = false;
+
 /**
- * Обработка захвата элемента со страницы
+ * Обработка выбранного элемента 
  */
-async function captureElement(elementInfo: ElementInfo): Promise<void> {
+async function handleSelectedElement(elementInfo: ElementInfo): Promise<void> {
+  console.log('[WebCheck:Background] Processing selected element:', elementInfo.selector);
+  
   try {
-    console.log('[WebCheck] Capturing element:', elementInfo);
-    
     // Получаем активную вкладку
     const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
     if (!tabs || tabs.length === 0) {
@@ -95,21 +98,107 @@ async function captureElement(elementInfo: ElementInfo): Promise<void> {
     // Сохраняем данные для последующего редактирования
     await chrome.storage.local.set({ newTaskData: task });
     
-    // Открываем страницу редактирования задачи в popup
     // Отправляем сообщение в popup
-    chrome.runtime.sendMessage({
-      action: 'elementCaptured',
-      task
-    });
+    try {
+      chrome.runtime.sendMessage({
+        action: 'elementCaptured',
+        task
+      });
+      console.log('[WebCheck:Background] Element captured message sent to popup');
+    } catch (error) {
+      console.warn('[WebCheck:Background] Error sending message to popup (this is normal if popup is closed):', error);
+    }
     
-    console.log('[WebCheck] Element captured successfully:', task);
+    console.log('[WebCheck:Background] Element processing completed successfully');
+    
+    // Сбрасываем флаг выбора элемента
+    elementSelectionActive = false;
     
   } catch (error) {
-    console.error('[WebCheck] Error capturing element:', error);
-    chrome.runtime.sendMessage({
-      action: 'captureError',
-      error: error instanceof Error ? error.message : 'Unknown error'
+    console.error('[WebCheck:Background] Error processing selected element:', error);
+    elementSelectionActive = false;
+    
+    try {
+      chrome.runtime.sendMessage({
+        action: 'captureError',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    } catch (msgError) {
+      console.warn('[WebCheck:Background] Error sending error message to popup:', msgError);
+    }
+  }
+}
+
+/**
+ * Активация выбора элемента
+ */
+async function activateElementSelection(tabId: number): Promise<void> {
+  console.log('[WebCheck:Background] Activating element selection on tab:', tabId);
+  
+  // Проверяем, активен ли уже выбор элемента
+  if (elementSelectionActive) {
+    console.log('[WebCheck:Background] Element selection already active');
+    return;
+  }
+  
+  elementSelectionActive = true;
+  
+  try {
+    // Используем executeScript для инжекции скрипта выбора элемента
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      files: ['content-script/element-selector.js']
     });
+    
+    console.log('[WebCheck:Background] Element selector injected successfully');
+  } catch (error) {
+    console.error('[WebCheck:Background] Error injecting element selector:', error);
+    elementSelectionActive = false;
+    
+    // Сообщаем об ошибке в popup
+    try {
+      chrome.runtime.sendMessage({
+        action: 'elementSelectionError',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    } catch (msgError) {
+      console.warn('[WebCheck:Background] Error sending error message to popup:', msgError);
+    }
+  }
+}
+
+/**
+ * Отмена выбора элемента
+ */
+async function cancelElementSelection(tabId: number): Promise<void> {
+  console.log('[WebCheck:Background] Cancelling element selection on tab:', tabId);
+  
+  // Если выбор элемента не активен, ничего не делаем
+  if (!elementSelectionActive) {
+    console.log('[WebCheck:Background] Element selection not active, nothing to cancel');
+    return;
+  }
+  
+  elementSelectionActive = false;
+  
+  try {
+    // Отправляем сообщение в content script для отмены выбора элемента
+    await chrome.tabs.sendMessage(tabId, {
+      action: 'cancelElementSelection'
+    });
+    
+    console.log('[WebCheck:Background] Cancel message sent to content script');
+  } catch (error) {
+    console.warn('[WebCheck:Background] Error sending cancel message (this may be normal):', error);
+  }
+  
+  // Отправляем сообщение в popup об отмене выбора элемента
+  try {
+    chrome.runtime.sendMessage({
+      action: 'elementSelectionCancelled'
+    });
+  } catch (msgError) {
+    console.warn('[WebCheck:Background] Error sending cancellation message to popup:', msgError);
   }
 }
 
@@ -124,7 +213,7 @@ async function getDefaultInterval(): Promise<string> {
     }
     return '1h'; // Интервал по умолчанию, если настройки не найдены
   } catch (error) {
-    console.error('[WebCheck] Error getting default interval:', error);
+    console.error('[WebCheck:Background] Error getting default interval:', error);
     return '1h';
   }
 }
@@ -138,16 +227,69 @@ function generateId(): string {
 
 // Обработчик сообщений
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message.action === 'captureElement') {
-    captureElement(message.elementInfo);
+  console.log('[WebCheck:Background] Received message:', message.action, 
+    sender.tab ? `from tab ${sender.tab.id}` : 'from extension');
+  
+  // Обработка выбранного элемента
+  if (message.action === 'elementSelected') {
+    handleSelectedElement(message.elementInfo);
+    sendResponse({ status: 'processing' });
     return true;
   }
   
-  if (message.action === 'cancelElementSelection') {
-    chrome.runtime.sendMessage({ action: 'elementSelectionCancelled' });
+  // Обработка отмены выбора элемента
+  if (message.action === 'elementSelectionCancelled') {
+    elementSelectionActive = false;
+    
+    // Пересылаем сообщение в popup
+    try {
+      chrome.runtime.sendMessage({
+        action: 'elementSelectionCancelled'
+      });
+      console.log('[WebCheck:Background] Cancellation message forwarded to popup');
+    } catch (error) {
+      console.warn('[WebCheck:Background] Error forwarding cancellation message (this may be normal):', error);
+    }
+    
+    sendResponse({ status: 'cancelled' });
     return true;
   }
+  
+  // Запрос на активацию выбора элемента
+  if (message.action === 'activateElementSelection') {
+    const tabId = message.tabId;
+    if (tabId) {
+      activateElementSelection(tabId);
+      sendResponse({ status: 'activating' });
+    } else {
+      console.error('[WebCheck:Background] No tab ID provided for element selection activation');
+      sendResponse({ status: 'error', error: 'No tab ID provided' });
+    }
+    return true;
+  }
+  
+  // Запрос на отмену выбора элемента
+  if (message.action === 'cancelElementSelection') {
+    const tabId = message.tabId;
+    if (tabId) {
+      cancelElementSelection(tabId);
+      sendResponse({ status: 'cancelling' });
+    } else {
+      console.error('[WebCheck:Background] No tab ID provided for element selection cancellation');
+      sendResponse({ status: 'error', error: 'No tab ID provided' });
+    }
+    return true;
+  }
+  
+  return false;
 });
 
 // Инициализация модуля при загрузке background script
 console.log('[WebCheck] Element capture module initialized');
+
+// Обработчик установки расширения
+chrome.runtime.onInstalled.addListener(({ reason }) => {
+  if (reason === 'install') {
+    console.log('Web Check extension installed');
+  }
+});

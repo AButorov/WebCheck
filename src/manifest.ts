@@ -36,10 +36,11 @@ export default defineManifest(async (env) => ({
     service_worker: 'src/background/index.ts',
     type: 'module',
   },
+  // Используем только базовый content-script для проверки изменений
   content_scripts: [
     {
       matches: ['http://*/*', 'https://*/*'],
-      js: ['src/content-script/index.ts'],
+      js: ['src/content-script/index.ts']
     }
   ],
   // CSP для MV3 - максимально строгая, без unsafe-eval
@@ -53,10 +54,19 @@ export default defineManifest(async (env) => ({
     'scripting',
     'activeTab',
     'tabs',
-    'tabCapture',
+    'tabCapture'
   ],
   host_permissions: [
     'http://*/*',
     'https://*/*',
   ],
+  web_accessible_resources: [
+    {
+      resources: [
+        'content-script/*',
+        'icons/*'
+      ],
+      matches: ['<all_urls>']
+    }
+  ]
 }))
