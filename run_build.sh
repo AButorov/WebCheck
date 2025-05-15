@@ -1,6 +1,7 @@
 #!/bin/bash
 
-# Простой скрипт для запуска сборки проекта
-cd /Users/butorov.ap/Documents/005_Programm/012_TS_vue/002_WebCheck
+# Сделать скрипт исполняемым
 chmod +x ./build.sh
+
+# Запустить сборку в режиме отладки
 ./build.sh debug

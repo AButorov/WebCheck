@@ -59,6 +59,7 @@ export default defineManifest(async (env) => ({
   host_permissions: [
     'http://*/*',
     'https://*/*',
+    '<all_urls>'
   ],
   web_accessible_resources: [
     {

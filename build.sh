@@ -1,8 +1,13 @@
 #!/bin/bash
 
+# Делаем скрипты исполняемыми
+chmod +x ./build.sh
+chmod +x ./backup.sh
+chmod +x ./clear.sh
+
 # Универсальный скрипт для подготовки и сборки расширения Web Check
 # Включает все необходимые проверки и создает CSP-совместимую MV3 продуктивную версию
-# Последнее обновление: 17.05.2025 14:00 - Исправлено закрытие редактора задач после выбора элемента
+# Последнее обновление: 17.05.2025 15:00 - Исправлена ошибка разрешений при захвате элементов
 
 # Цвета для вывода
 RED='\033[0;31m'
@@ -308,11 +313,50 @@ fix_manifest() {
             echo -e "${GREEN}✓ manifest.json совместим с CSP${NC}"
         fi
         
+        # Проверка наличия необходимых разрешений
+        if ! grep -q '"<all_urls>"' "$MANIFEST_PATH" || ! grep -q '"activeTab"' "$MANIFEST_PATH"; then
+            echo -e "${YELLOW}Внимание: В manifest.json отсутствуют необходимые разрешения для выбора элементов${NC}"
+            
+            # Сохраняем копию оригинального файла
+            cp "$MANIFEST_PATH" "$MANIFEST_PATH.bak"
+            
+            # Добавляем разрешение <all_urls> в host_permissions, если оно отсутствует
+            if ! grep -q '"<all_urls>"' "$MANIFEST_PATH"; then
+                # Добавляем в host_permissions
+                sed -i.bak 's/"host_permissions": \[/"host_permissions": \[\n    "<all_urls>",/g' "$MANIFEST_PATH"
+                echo -e "${GREEN}✓ Разрешение '<all_urls>' добавлено в host_permissions${NC}"
+            fi
+            
+            # Добавляем activeTab в permissions, если он отсутствует
+            if ! grep -q '"activeTab"' "$MANIFEST_PATH"; then
+                sed -i.bak 's/"permissions": \[/"permissions": \[\n    "activeTab",/g' "$MANIFEST_PATH"
+                echo -e "${GREEN}✓ Разрешение 'activeTab' добавлено в permissions${NC}"
+            fi
+            
+            # Удаляем резервную копию и временные файлы
+            rm -f "$MANIFEST_PATH.bak"
+            rm -f "$MANIFEST_PATH.bak.bak" # Удаляем возможные случайные дополнительные копии
+        else
+            echo -e "${GREEN}✓ manifest.json содержит необходимые разрешения для выбора элементов${NC}"
+        fi
+        
         # Проверка версии манифеста
         if grep -q '"manifest_version": *3' "$MANIFEST_PATH"; then
             echo -e "${GREEN}✓ Используется Manifest V3${NC}"
         else
             echo -e "${RED}Ошибка: Не используется Manifest V3${NC}"
+        fi
+        
+        # Проверка включения содержимого element-selector.js в web_accessible_resources
+        if grep -q 'content-script/element-selector.js' "$MANIFEST_PATH"; then
+            echo -e "${GREEN}✓ element-selector.js включен в web_accessible_resources${NC}"
+        else
+            echo -e "${YELLOW}Внимание: element-selector.js не включен в web_accessible_resources${NC}"
+            echo -e "${YELLOW}Добавляем...${NC}"
+            
+            # Добавляем необходимый ресурс
+            sed -i.bak 's/"content-script\/\*",/"content-script\/\*",\n        "content-script\/element-selector.js",/g' "$MANIFEST_PATH"
+            echo -e "${GREEN}✓ element-selector.js успешно добавлен${NC}"
         fi
     fi
 }
