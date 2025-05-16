@@ -36,6 +36,7 @@ interface Task {
 // Переменная для отслеживания состояния выбора элемента
 let elementSelectionActive = false;
 
+// Обработка выбранного элемента 
 /**
  * Обработка выбранного элемента 
  */
@@ -44,7 +45,11 @@ async function handleSelectedElement(elementInfo: ElementInfo): Promise<void> {
   
   try {
     // Получаем активную вкладку
-    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+    const tabs = await chrome.tabs.query({ active: true, currentWindow: true }).catch(error => {
+      console.error('[WebCheck:Background] Error querying tabs:', error);
+      return [] as chrome.tabs.Tab[];
+    });
+    
     if (!tabs || tabs.length === 0) {
       throw new Error('Active tab not found');
     }
@@ -55,33 +60,38 @@ async function handleSelectedElement(elementInfo: ElementInfo): Promise<void> {
     let thumbnailUrl = elementInfo.thumbnailUrl;
     
     if (!thumbnailUrl) {
-      // Захватываем весь экран и сохраняем URL
-      thumbnailUrl = await chrome.tabs.captureVisibleTab(null, { format: 'png' });
-      
-      // Примечание: мы не можем обрезать изображение здесь, так как Service Worker 
-      // не имеет доступа к DOM API. Будем использовать полный скриншот.
-      console.log('[WebCheck:Background] Using full screenshot as thumbnail');
+      try {
+        // Захватываем весь экран и сохраняем URL
+        thumbnailUrl = await chrome.tabs.captureVisibleTab(null, { format: 'png' });
+        console.log('[WebCheck:Background] Using full screenshot as thumbnail');
+      } catch (screenshotError) {
+        console.warn('[WebCheck:Background] Error capturing screenshot:', screenshotError);
+        thumbnailUrl = null; // В случае ошибки продолжаем без скриншота
+      }
     }
     
     // Создаем новую задачу
     const task: Task = {
       id: generateId(),
-      title: elementInfo.pageTitle,
-      url: elementInfo.pageUrl,
-      faviconUrl: elementInfo.faviconUrl,
+      title: elementInfo.pageTitle || 'Новая задача',
+      url: elementInfo.pageUrl || '',
+      faviconUrl: elementInfo.faviconUrl || '',
       selector: elementInfo.selector,
       createdAt: Date.now(),
       status: 'unchanged',
       interval: await getDefaultInterval(),
-      initialHtml: elementInfo.html,
-      currentHtml: elementInfo.html,
+      initialHtml: elementInfo.html || '',
+      currentHtml: elementInfo.html || '',
       thumbnailUrl: thumbnailUrl,
+      thumbnailHtml: elementInfo.thumbnailHtml, // Сохраняем HTML-версию миниатюры
       lastCheckedAt: Date.now(),
       lastChangedAt: null
     };
     
     // Сохраняем данные для последующего редактирования
-    await chrome.storage.local.set({ newTaskData: task });
+    await chrome.storage.local.set({ newTaskData: task }).catch(error => {
+      console.error('[WebCheck:Background] Error storing task data:', error);
+    });
     
     // Показываем уведомление в Chrome
     try {
@@ -98,23 +108,30 @@ async function handleSelectedElement(elementInfo: ElementInfo): Promise<void> {
     
     // Пытаемся отправить сообщение в popup
     try {
-    // Проверяем, есть ли слушатели перед отправкой сообщения
-    chrome.runtime.sendMessage({action: 'ping'}, (response) => {
-    // Если есть ответ, значит popup активен
-      const lastError = chrome.runtime.lastError;
-      if (!lastError) {
-          chrome.runtime.sendMessage({
-          action: 'elementCaptured',
-            task
+      // Используем механизм проверки соединения с обработкой ошибок
+      chrome.runtime.sendMessage({action: 'ping'}, (response) => {
+        // Обязательно проверяем chrome.runtime.lastError внутри callback
+        const lastError = chrome.runtime.lastError;
+        if (lastError) {
+          console.log('[WebCheck:Background] Popup not available due to error:', lastError.message);
+          console.log('[WebCheck:Background] Task data saved to storage');
+          return;
+        }
+        
+        // Если дошли сюда, значит popup активен
+        chrome.runtime.sendMessage({action: 'elementCaptured', task}, (msgResponse) => {
+          // Снова проверяем ошибку
+          const msgError = chrome.runtime.lastError;
+          if (msgError) {
+            console.log('[WebCheck:Background] Error sending task to popup:', msgError.message);
+          } else {
+            console.log('[WebCheck:Background] Element captured message sent to popup');
+          }
         });
-        console.log('[WebCheck:Background] Element captured message sent to popup');
-      } else {
-        console.log('[WebCheck:Background] Popup not available, task data saved to storage');
-      }
-    });
-  } catch (error) {
-    console.warn('[WebCheck:Background] Error checking popup status:', error);
-  }
+      });
+    } catch (error) {
+      console.warn('[WebCheck:Background] Error checking popup status:', error);
+    }
     
     console.log('[WebCheck:Background] Element processing completed successfully');
     
@@ -126,9 +143,15 @@ async function handleSelectedElement(elementInfo: ElementInfo): Promise<void> {
     elementSelectionActive = false;
     
     try {
+      // Отправляем сообщение об ошибке, но с проверкой на ошибку отправки
       chrome.runtime.sendMessage({
         action: 'captureError',
         error: error instanceof Error ? error.message : 'Unknown error'
+      }, (response) => {
+        const lastError = chrome.runtime.lastError;
+        if (lastError) {
+          console.warn('[WebCheck:Background] Unable to send error message: ', lastError.message);
+        }
       });
     } catch (msgError) {
       console.warn('[WebCheck:Background] Error sending error message to popup:', msgError);
@@ -151,13 +174,51 @@ async function activateElementSelection(tabId: number): Promise<void> {
   elementSelectionActive = true;
   
   try {
+    // Дополнительная проверка наличия вкладки
+    try {
+      const tab = await chrome.tabs.get(tabId);
+      if (!tab) {
+        throw new Error(`Tab ${tabId} not found`);
+      }
+      
+      // Проверяем, что вкладка доступна для скриптинга
+      if (tab.url && !tab.url.startsWith('chrome:') && !tab.url.startsWith('chrome-extension:')) {
+        console.log('[WebCheck:Background] Tab OK for scripting:', tab.url);
+      } else {
+        console.warn('[WebCheck:Background] Tab may not support scripting:', tab.url);
+      }
+    } catch (e) {
+      console.warn('[WebCheck:Background] Error checking tab:', e);
+      // Продолжаем несмотря на ошибку проверки
+    }
+    
+    // Активируем вкладку перед инжекцией скрипта
+    await chrome.tabs.update(tabId, { active: true });
+    
+    // Небольшая задержка для гарантированной активации вкладки
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
     // Используем executeScript для инжекции скрипта выбора элемента
-    await chrome.scripting.executeScript({
+    const results = await chrome.scripting.executeScript({
       target: { tabId },
       files: ['content-script/element-selector.js']
     });
     
-    console.log('[WebCheck:Background] Element selector injected successfully');
+    // Проверяем результаты инжекции
+    if (results && results.length > 0) {
+      console.log('[WebCheck:Background] Element selector injected successfully:', results);
+    } else {
+      console.warn('[WebCheck:Background] Element selector injection returned no results');
+    }
+    
+    // Дополнительно проверяем через сообщение, активен ли селектор
+    try {
+      const response = await chrome.tabs.sendMessage(tabId, { action: 'checkElementSelectorActive' });
+      console.log('[WebCheck:Background] Element selector status check:', response);
+    } catch (e) {
+      // Если ответ не получен, но это не критично
+      console.log('[WebCheck:Background] Could not check element selector status, but continuing');
+    }
   } catch (error) {
     console.error('[WebCheck:Background] Error injecting element selector:', error);
     elementSelectionActive = false;
@@ -167,9 +228,27 @@ async function activateElementSelection(tabId: number): Promise<void> {
       chrome.runtime.sendMessage({
         action: 'elementSelectionError',
         error: error instanceof Error ? error.message : 'Unknown error'
+      }, (response) => {
+        // Проверяем ошибку отправки
+        const lastError = chrome.runtime.lastError;
+        if (lastError) {
+          console.warn('[WebCheck:Background] Error sending error message to popup:', lastError.message);
+        }
       });
     } catch (msgError) {
       console.warn('[WebCheck:Background] Error sending error message to popup:', msgError);
+    }
+    
+    // Пытаемся показать уведомление в браузере
+    try {
+      await chrome.notifications.create({
+        type: 'basic',
+        iconUrl: chrome.runtime.getURL('icons/icon-128.png'),
+        title: 'Ошибка выбора элемента',
+        message: 'Не удалось активировать выбор элемента. Попробуйте еще раз.',
+      });
+    } catch (notificationError) {
+      console.warn('[WebCheck:Background] Failed to show error notification:', notificationError);
     }
   }
 }
@@ -254,8 +333,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   
   // Обработка выбранного элемента
   if (message.action === 'elementSelected') {
-    handleSelectedElement(message.elementInfo);
-    sendResponse({ status: 'processing' });
+    try {
+      handleSelectedElement(message.elementInfo);
+      sendResponse({ status: 'processing' });
+    } catch (error) {
+      console.error('[WebCheck:Background] Error in handleSelectedElement:', error);
+      sendResponse({ status: 'error', error: error instanceof Error ? error.message : 'Unknown error' });
+    }
     return true;
   }
   
@@ -263,19 +347,28 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === 'elementSelectionCancelled') {
     elementSelectionActive = false;
     
-    // Пересылаем сообщение в popup
+    // Пересылаем сообщение в popup с обработкой ошибок
     try {
       // Проверяем, есть ли слушатели перед отправкой сообщения
       chrome.runtime.sendMessage({action: 'ping'}, (response) => {
         const lastError = chrome.runtime.lastError;
-        if (!lastError) {
-          chrome.runtime.sendMessage({
-            action: 'elementSelectionCancelled'
-          });
-          console.log('[WebCheck:Background] Cancellation message forwarded to popup');
-        } else {
-          console.log('[WebCheck:Background] Popup not available for forwarding cancellation');
+        if (lastError) {
+          // Если есть ошибка, значит popup недоступен
+          console.log('[WebCheck:Background] Popup not available for forwarding cancellation:', lastError.message);
+          return;
         }
+        
+        // Если прошли эту проверку, то popup доступен
+        chrome.runtime.sendMessage({
+          action: 'elementSelectionCancelled'
+        }, (cancellationResponse) => {
+          const cancellationError = chrome.runtime.lastError;
+          if (cancellationError) {
+            console.log('[WebCheck:Background] Error forwarding cancellation:', cancellationError.message);
+          } else {
+            console.log('[WebCheck:Background] Cancellation message forwarded to popup');
+          }
+        });
       });
     } catch (error) {
       console.warn('[WebCheck:Background] Error checking popup status for forwarded cancellation:', error);
@@ -289,8 +382,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === 'activateElementSelection') {
     const tabId = message.tabId;
     if (tabId) {
-      activateElementSelection(tabId);
-      sendResponse({ status: 'activating' });
+      try {
+        activateElementSelection(tabId);
+        sendResponse({ status: 'activating' });
+      } catch (error) {
+        console.error('[WebCheck:Background] Error activating element selection:', error);
+        sendResponse({ status: 'error', error: error instanceof Error ? error.message : 'Unknown error' });
+      }
     } else {
       console.error('[WebCheck:Background] No tab ID provided for element selection activation');
       sendResponse({ status: 'error', error: 'No tab ID provided' });
@@ -302,8 +400,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === 'cancelElementSelection') {
     const tabId = message.tabId;
     if (tabId) {
-      cancelElementSelection(tabId);
-      sendResponse({ status: 'cancelling' });
+      try {
+        cancelElementSelection(tabId);
+        sendResponse({ status: 'cancelling' });
+      } catch (error) {
+        console.error('[WebCheck:Background] Error cancelling element selection:', error);
+        sendResponse({ status: 'error', error: error instanceof Error ? error.message : 'Unknown error' });
+      }
     } else {
       console.error('[WebCheck:Background] No tab ID provided for element selection cancellation');
       sendResponse({ status: 'error', error: 'No tab ID provided' });

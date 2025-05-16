@@ -119,7 +119,7 @@ export default defineComponent({
       }
     }
     
-    // Активация выбора элемента на странице
+// Активация выбора элемента на странице
     async function activateElementSelection() {
       try {
         // Получаем активную вкладку
@@ -132,22 +132,28 @@ export default defineComponent({
         activeTabId.value = tab.id;
         console.log('[NewTask] Activating element selection on tab:', tab.id);
         
-        // Активируем вкладку и окно перед отправкой сообщения
+        // Сначала отправляем сообщение в background script для активации выбора элемента
+        const response = await browser.runtime.sendMessage({
+          action: 'activateElementSelection',
+          tabId: tab.id
+        });
+        
+        console.log('[NewTask] Element selection activation response:', response);
+        
+        // Показываем уведомление о выборе элемента
+        elementSelection.value = true;
+        
+        // Активируем вкладку и окно после отправки сообщения
         await browser.tabs.update(tab.id, { active: true });
         await browser.windows.update(tab.windowId, { focused: true });
         
         // Небольшая задержка для гарантированной активации вкладки
         await new Promise(resolve => setTimeout(resolve, 100));
         
-        // Отправляем сообщение в background script для активации выбора элемента
-        await browser.runtime.sendMessage({
-          action: 'activateElementSelection',
-          tabId: tab.id
-        });
+        // Только после успешной активации закрываем popup
+        window.close();
         
-        // Показываем уведомление о выборе элемента
-        elementSelection.value = true;
-        console.log('[NewTask] Element selection activation request sent');
+        console.log('[NewTask] Element selection activation complete');
       } catch (err) {
         console.error('[NewTask] Error activating element selection:', err);
         error.value = 'Не удалось активировать выбор элемента: ' + (err.message || 'Неизвестная ошибка');

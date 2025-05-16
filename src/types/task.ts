@@ -16,6 +16,7 @@ export interface WebCheckTask {
   lastCheckedAt: number;
   lastChangedAt: number | null;
   thumbnailUrl?: string; // URL скриншота элемента для предпросмотра
+  thumbnailHtml?: string; // HTML-версия миниатюры для случаев, когда скриншот недоступен
 }
 
 export interface ElementInfo {
@@ -25,4 +26,6 @@ export interface ElementInfo {
   pageTitle: string;
   pageUrl: string;
   faviconUrl: string;
+  thumbnailUrl?: string; // URL миниатюры, если создана в content script
+  thumbnailHtml?: string; // HTML-версия миниатюры для более надежного отображения
 }
