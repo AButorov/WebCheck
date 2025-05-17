@@ -1,26 +1,11 @@
 <template>
   <div class="task-editor p-4 bg-white rounded-lg shadow">
-    <h2 class="text-xl font-bold mb-4">{{ isEdit ? 'Редактирование задачи' : 'Новая задача' }}</h2>
-    
-    <!-- Миниатюра элемента -->
-    <div class="mb-3">
-      <p class="text-sm text-gray-600 mb-1">Выбранный элемент:</p>
-      <div class="thumbnail-container border rounded-lg overflow-hidden bg-gray-50">
-        <iframe 
-          v-if="task.thumbnailUrl" 
-          :src="task.thumbnailUrl" 
-          frameborder="0" 
-          class="w-full h-24 object-contain"
-        ></iframe>
-        <div v-else class="bg-gray-100 w-full h-24 flex items-center justify-center text-gray-400">
-          Изображение недоступно
-        </div>
-      </div>
-    </div>
+    <!-- Убираем заголовок для избежания дублирования -->
+    <h2 v-if="isEdit" class="text-xl font-bold mb-4">Редактирование задачи</h2>
     
     <!-- Форма редактирования -->
     <form @submit.prevent="saveTask">
-      <!-- Название задачи -->
+      <!-- Название задачи (перемещено вверх) -->
       <div class="mb-3">
         <label class="block text-sm font-medium text-gray-700 mb-1">Название задачи</label>
         <input 
@@ -28,7 +13,24 @@
           type="text" 
           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-[#3e66fb] focus:border-[#3e66fb]"
           required
+          ref="titleInput"
         />
+      </div>
+      
+      <!-- Миниатюра элемента (перемещена ниже) -->
+      <div class="mb-3">
+        <p class="text-sm text-gray-600 mb-1">Выбранный элемент:</p>
+        <div class="thumbnail-container border rounded-lg overflow-hidden bg-gray-50">
+          <iframe 
+            v-if="task.thumbnailUrl" 
+            :src="task.thumbnailUrl" 
+            frameborder="0" 
+            class="w-full h-24 object-contain"
+          ></iframe>
+          <div v-else class="bg-gray-100 w-full h-24 flex items-center justify-center text-gray-400">
+            Изображение недоступно
+          </div>
+        </div>
       </div>
       
       <!-- Источник (сайт) -->
@@ -113,6 +115,9 @@ export default defineComponent({
     // Создаем копию задачи для редактирования
     const editedTask = ref({...props.task});
     
+    // Создаем ref для доступа к полю ввода названия
+    const titleInput = ref(null);
+    
     // Вычисляемое свойство для отображения URL
     const displayUrl = computed(() => {
       try {
@@ -141,10 +146,20 @@ export default defineComponent({
     // При монтировании компонента
     onMounted(() => {
       console.log('[TaskEditor] Task loaded:', props.task);
+      
+      // Устанавливаем фокус на поле ввода названия и выделяем текст
+      // Небольшая задержка для уверенности, что DOM полностью загружен
+      setTimeout(() => {
+        if (titleInput.value) {
+          titleInput.value.focus();
+          titleInput.value.select(); // Выделяем весь текст
+        }
+      }, 100);
     });
     
     return {
       editedTask,
+      titleInput,
       displayUrl,
       onFaviconError,
       saveTask,
