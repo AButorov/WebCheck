@@ -357,6 +357,9 @@
     quietCleanup();
     
     // Показываем уведомление пользователю
+    // Полностью убираем отображение уведомления на странице
+    // Вся обработка будет происходить в background и попапе
+    /*
     try {
     const notificationElement = document.createElement('div');
     notificationElement.className = 'webcheck-notification';
@@ -364,9 +367,9 @@
     <div class="webcheck-notification-content">
     <div class="webcheck-notification-icon">✅</div>
     <div class="webcheck-notification-text">
-      <div class="webcheck-notification-title">Элемент успешно выбран!</div>
-        <div class="webcheck-notification-message">Нажмите на иконку расширения, чтобы продолжить.</div>
-        </div>
+    <div class="webcheck-notification-title">Элемент успешно выбран!</div>
+    <div class="webcheck-notification-message">Форма редактирования открывается автоматически...</div>
+    </div>
       </div>
     `;
     
@@ -431,14 +434,15 @@
     }, 5000);
     } catch (e) {
         console.error('[WebCheck:ElementSelector] Error showing notification:', e);
-        }
+        }*/
     });
     } catch (error) {
       console.error('[WebCheck:ElementSelector] Error sending message to background:', error);
     // Даже если отправка сообщения не удалась, все равно выполняем очистку
     quietCleanup();
     
-    // Показываем уведомление об ошибке на странице
+    // Убираем отображение уведомления об ошибке на странице
+    /*
     try {
       const errorNotification = document.createElement('div');
       errorNotification.className = 'webcheck-notification webcheck-notification-error';
@@ -447,7 +451,7 @@
           <div class="webcheck-notification-icon">⚠️</div>
           <div class="webcheck-notification-text">
             <div class="webcheck-notification-title">Элемент выбран, но возникли проблемы связи</div>
-            <div class="webcheck-notification-message">Нажмите на иконку расширения, чтобы продолжить.</div>
+            <div class="webcheck-notification-message">Попробуйте нажать на иконку расширения для открытия формы редактирования.</div>
           </div>
         </div>
       `;
@@ -519,6 +523,7 @@
     } catch (e) {
       console.error('[WebCheck:ElementSelector] Error showing error notification:', e);
     }
+    */
   }
     
     console.log('[WebCheck:ElementSelector] Element selected with selector:', selector);

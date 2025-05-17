@@ -7,11 +7,14 @@
 <script>
 import { defineComponent, onMounted, onErrorCaptured } from 'vue'
 import '~/assets/styles/tailwind.css'
+import browser from 'webextension-polyfill'
 
 export default defineComponent({
   name: 'App',
   
   setup() {
+    const router = window.vueRouter
+    
     // Обработка ошибок
     onErrorCaptured((err, instance, info) => {
       console.error('[APP] Error captured:', err)
@@ -21,11 +24,31 @@ export default defineComponent({
       return false
     })
     
-    onMounted(() => {
+    onMounted(async () => {
       console.log('[APP] App component mounted')
       
       // Добавляем класс для скроллбара
       document.documentElement.classList.add('custom-scrollbar')
+      
+      // Проверяем, нужно ли перейти на страницу редактирования задачи
+      try {
+        // Проверяем наличие флага для открытия формы редактирования
+        const result = await browser.storage.local.get(['openNewTaskEditor', 'newTaskData'])
+        
+        if (result.openNewTaskEditor === true && result.newTaskData) {
+          console.log('[APP] Auto-redirecting to new task editor')
+          
+          // Очищаем флаг перенаправления
+          await browser.storage.local.remove('openNewTaskEditor')
+          
+          // Переходим на страницу редактирования
+          if (router) {
+            router.push('/new-task')
+          }
+        }
+      } catch (err) {
+        console.error('[APP] Error checking for redirect flag:', err)
+      }
     })
     
     return {}

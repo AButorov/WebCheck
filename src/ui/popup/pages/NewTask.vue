@@ -120,46 +120,46 @@ export default defineComponent({
     }
     
 // Активация выбора элемента на странице
-    async function activateElementSelection() {
-      try {
-        // Получаем активную вкладку
-        const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
-        
-        if (!tab) {
-          throw new Error('Не удалось получить активную вкладку');
-        }
-        
-        activeTabId.value = tab.id;
-        console.log('[NewTask] Activating element selection on tab:', tab.id);
-        
-        // Сначала отправляем сообщение в background script для активации выбора элемента
-        const response = await browser.runtime.sendMessage({
-          action: 'activateElementSelection',
-          tabId: tab.id
-        });
-        
-        console.log('[NewTask] Element selection activation response:', response);
-        
-        // Показываем уведомление о выборе элемента
-        elementSelection.value = true;
-        
-        // Активируем вкладку и окно после отправки сообщения
-        await browser.tabs.update(tab.id, { active: true });
-        await browser.windows.update(tab.windowId, { focused: true });
-        
-        // Небольшая задержка для гарантированной активации вкладки
-        await new Promise(resolve => setTimeout(resolve, 100));
-        
-        // Только после успешной активации закрываем popup
-        window.close();
-        
-        console.log('[NewTask] Element selection activation complete');
-      } catch (err) {
-        console.error('[NewTask] Error activating element selection:', err);
-        error.value = 'Не удалось активировать выбор элемента: ' + (err.message || 'Неизвестная ошибка');
-        elementSelection.value = false;
-      }
-    }
+async function activateElementSelection() {
+try {
+// Получаем активную вкладку
+const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
+
+if (!tab) {
+throw new Error('Не удалось получить активную вкладку');
+}
+
+activeTabId.value = tab.id;
+console.log('[NewTask] Activating element selection on tab:', tab.id);
+
+// Сначала отправляем сообщение в background script для активации выбора элемента
+const response = await browser.runtime.sendMessage({
+action: 'activateElementSelection',
+tabId: tab.id
+});
+
+console.log('[NewTask] Element selection activation response:', response);
+
+// Показываем уведомление о выборе элемента
+elementSelection.value = true;
+
+// Активируем вкладку и окно после отправки сообщения
+await browser.tabs.update(tab.id, { active: true });
+await browser.windows.update(tab.windowId, { focused: true });
+
+// Небольшая задержка для гарантированной активации вкладки
+await new Promise(resolve => setTimeout(resolve, 100));
+
+// Только после успешной активации закрываем popup
+window.close();
+
+console.log('[NewTask] Element selection activation complete');
+} catch (err) {
+console.error('[NewTask] Error activating element selection:', err);
+error.value = 'Не удалось активировать выбор элемента: ' + (err.message || 'Неизвестная ошибка');
+elementSelection.value = false;
+}
+}
     
     // Отмена выбора элемента
     async function cancelSelection() {
@@ -234,9 +234,13 @@ export default defineComponent({
         
         if (message.action === 'elementCaptured') {
           // Элемент успешно выбран и данные получены
+          console.log('[NewTask] Element captured, task data received:', message.task);
           task.value = message.task;
           elementSelection.value = false;
           loading.value = false;
+          
+          // Сразу показываем форму редактирования
+          console.log('[NewTask] Showing task editor form immediately');
         } else if (message.action === 'captureError') {
           // Ошибка при захвате элемента
           error.value = 'Ошибка при захвате элемента: ' + message.error;

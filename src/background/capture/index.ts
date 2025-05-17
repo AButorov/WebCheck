@@ -93,15 +93,26 @@ async function handleSelectedElement(elementInfo: ElementInfo): Promise<void> {
       console.error('[WebCheck:Background] Error storing task data:', error);
     });
     
-    // Показываем уведомление в Chrome
+    // Показываем уведомление в Chrome и открываем редактор задач
     try {
-      await chrome.notifications.create({
-        type: 'basic',
-        iconUrl: chrome.runtime.getURL('icons/icon-128.png'),
-        title: 'Элемент успешно выбран',
-        message: 'Нажмите на иконку расширения, чтобы продолжить',
+      // Сохраняем дополнительную информацию для маршрутизации
+      await chrome.storage.local.set({ 
+        newTaskData: task,
+        openNewTaskEditor: true // Добавляем флаг для маршрутизатора
+      }).catch(error => {
+        console.error('[WebCheck:Background] Error storing task data:', error);
       });
-      console.log('[WebCheck:Background] Notification shown to user');
+      
+      // Небольшая задержка перед открытием попапа, чтобы данные успели сохраниться
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      // Открываем попап с формой редактирования задачи
+      try {
+        await chrome.action.openPopup();
+        console.log('[WebCheck:Background] Opened popup automatically');
+      } catch (popupError) {
+        console.warn('[WebCheck:Background] Could not open popup automatically:', popupError);
+      }
     } catch (notificationError) {
       console.warn('[WebCheck:Background] Failed to show notification:', notificationError);
     }
