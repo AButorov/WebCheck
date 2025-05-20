@@ -189,14 +189,28 @@ elementSelection.value = false;
         const result = await browser.storage.local.get('tasks');
         let tasks = [];
         
-        if (result.tasks && Array.isArray(result.tasks)) {
-          tasks = result.tasks;
+        if (result.tasks) {
+          // Проверим, является ли tasks массивом
+          if (Array.isArray(result.tasks)) {
+            tasks = [...result.tasks];
+          } else if (typeof result.tasks === 'object') {
+            // Если это объект, преобразуем его в массив
+            console.log('[NewTask] Converting tasks object to array:', result.tasks);
+            tasks = Object.values(result.tasks);
+          }
         }
         
         // Добавляем новую задачу
         tasks.push(editedTask);
         
-        await browser.storage.local.set({ tasks });
+        // Убедимся, что сохраняем действительно массив
+        if (!Array.isArray(tasks)) {
+          console.error('[NewTask] Tasks is still not an array after conversion!', tasks);
+          tasks = [editedTask]; // На крайний случай просто создаем массив с одной новой задачей
+        }
+        
+        console.log('[NewTask] Saving tasks array:', tasks);
+        await browser.storage.local.set({ tasks: tasks }); // Явно указываем tasks
         
         console.log('[NewTask] Task saved successfully:', editedTask);
         

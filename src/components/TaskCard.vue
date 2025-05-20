@@ -56,6 +56,7 @@
           :disabled="task.status === 'paused'"
           @change="updateInterval"
         >
+          <option value="10s">10с</option>
           <option value="15m">15м</option>
           <option value="1h">1ч</option>
           <option value="3h">3ч</option>
@@ -264,6 +265,8 @@ export default defineComponent({
     function getIntervalMs(interval) {
       // Используем константы из файла констант
       switch (interval) {
+        case '10s':
+          return CHECK_INTERVALS.TEN_SECONDS.milliseconds
         case CHECK_INTERVALS.FIFTEEN_MINUTES.value:
           return CHECK_INTERVALS.FIFTEEN_MINUTES.milliseconds
         case CHECK_INTERVALS.ONE_HOUR.value:

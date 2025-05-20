@@ -28,39 +28,51 @@ export const useTasksStore = defineStore('tasks', {
       
       try {
         // Загрузка задач из хранилища
-        const tasks = await getStorageLocal('tasks', [] as WebCheckTask[])
-        console.log('[TASKS STORE] Tasks loaded from storage:', tasks)
+        const result = await getStorageLocal('tasks', [] as WebCheckTask[])
+        console.log('[TASKS STORE] Tasks loaded from storage:', result)
         
-        // Проверяем, что задачи являются массивом
-        if (!Array.isArray(tasks)) {
-          console.warn('[TASKS STORE] Tasks is not an array, resetting to empty array')
-          this.tasks = []
-          await setStorageLocal('tasks', [])
+        let tasks: WebCheckTask[] = []
+        
+        // Проверяем, является ли result массивом
+        if (Array.isArray(result)) {
+          tasks = [...result]
+        } else if (typeof result === 'object' && result !== null) {
+          // Если это объект, преобразуем его в массив
+          console.log('[TASKS STORE] Converting tasks object to array:', result)
+          tasks = Object.values(result)
+          // Проверяем, что получился массив
+          if (!Array.isArray(tasks)) {
+            console.warn('[TASKS STORE] Failed to convert tasks to array, creating empty array')
+            tasks = []
+          }
+        }
+        
+        // Проверяем целостность задач
+        const validTasks = tasks.filter(task => {
+          return task && typeof task === 'object' && task.id && task.url && task.selector
+        })
+        
+        if (validTasks.length !== tasks.length) {
+          console.warn('[TASKS STORE] Some tasks are invalid, filtered out:', tasks.length - validTasks.length)
+        }
+        
+        // Если задач нет или они недействительны, используем демо-данные
+        if (validTasks.length === 0) {
+          console.log('[TASKS STORE] No valid tasks found, generating demo data...')
+          
+          // Генерируем демо-задачи
+          this.tasks = generateDemoTasks()
+          
+          // Сохраняем демо-данные в хранилище
+          await setStorageLocal('tasks', this.tasks)
+          console.log('[TASKS STORE] Demo tasks saved to storage:', this.tasks)
         } else {
-          // Если задач нет, используем демо-данные
-          if (tasks.length === 0) {
-            console.log('[TASKS STORE] No tasks found, generating demo data...')
-            
-            // Генерируем демо-задачи
-            this.tasks = generateDemoTasks()
-            
-            // Сохраняем демо-данные в хранилище
-            await setStorageLocal('tasks', this.tasks)
-            console.log('[TASKS STORE] Demo tasks saved to storage:', this.tasks)
-          } else {
-            // Проверяем целостность задач
-            const validTasks = tasks.filter(task => {
-              // Проверяем наличие обязательных полей
-              return task && task.id && task.url && task.selector
-            })
-            
-            if (validTasks.length !== tasks.length) {
-              console.warn('[TASKS STORE] Some tasks are invalid, filtered out:', tasks.length - validTasks.length)
-              // Сохраняем только валидные задачи
-              await setStorageLocal('tasks', validTasks)
-            }
-            
-            this.tasks = validTasks
+          this.tasks = validTasks
+          
+          // Если были недействительные задачи, сохраняем только действительные
+          if (validTasks.length !== tasks.length) {
+            await setStorageLocal('tasks', validTasks)
+            console.log('[TASKS STORE] Saved filtered valid tasks to storage:', validTasks)
           }
         }
       } catch (error) {
@@ -73,6 +85,7 @@ export const useTasksStore = defineStore('tasks', {
           this.tasks = generateDemoTasks()
           // Сохраняем демо-данные в хранилище
           await setStorageLocal('tasks', this.tasks)
+          console.log('[TASKS STORE] Demo tasks saved as fallback:', this.tasks)
         } catch (innerError) {
           console.error('[TASKS STORE] Failed to generate demo data:', innerError)
           this.tasks = []
@@ -86,7 +99,17 @@ export const useTasksStore = defineStore('tasks', {
     async saveTasks() {
       console.log('[TASKS STORE] Saving tasks...')
       try {
-        await setStorageLocal('tasks', this.tasks)
+        // Убедимся, что this.tasks является массивом
+        if (!Array.isArray(this.tasks)) {
+          console.error('[TASKS STORE] this.tasks is not an array:', this.tasks)
+          return
+        }
+        
+        // Создаем копию массива для сохранения
+        const tasksCopy = [...this.tasks]
+        console.log('[TASKS STORE] Saving tasks array (length=' + tasksCopy.length + '):', tasksCopy)
+        
+        await setStorageLocal('tasks', tasksCopy)
         console.log('[TASKS STORE] Tasks saved successfully')
       } catch (error) {
         console.error('[TASKS STORE] Error saving tasks:', error)

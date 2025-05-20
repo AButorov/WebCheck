@@ -238,26 +238,39 @@ async function checkTaskForChanges(task: WebCheckTask): Promise<void> {
  */
 function showNotification(task: WebCheckTask, newHtml: string) {
   // Создаем уведомление
-  browser.notifications.create(`webcheck-${task.id}`, {
-    type: 'basic',
-    iconUrl: browser.runtime.getURL('assets/icons/icon-changed-48.png'),
-    title: 'Обнаружены изменения',
-    message: `Страница "${task.title}" была изменена`,
-    priority: 2
-  })
-  
-  // Обработчик клика по уведомлению
-  browser.notifications.onClicked.addListener((notificationId) => {
-    if (notificationId === `webcheck-${task.id}`) {
-      // Открываем страницу для просмотра изменений
-      browser.tabs.create({
-        url: browser.runtime.getURL(`ui/popup/pages/ViewChanges.html?id=${task.id}`)
-      })
-      
-      // Закрываем уведомление
-      browser.notifications.clear(notificationId)
-    }
-  })
+  try {
+    browser.notifications.create(`webcheck-${task.id}`, {
+      type: 'basic',
+      iconUrl: browser.runtime.getURL('icons/icon-changed-48.png'), // Исправленный путь без 'assets/'
+      title: 'Обнаружены изменения',
+      message: `Страница "${task.title}" была изменена`,
+      priority: 2
+    }).catch(error => {
+      console.error('[MONITOR] Error showing notification:', error)
+    })
+    
+    // Обработчик клика по уведомлению
+    browser.notifications.onClicked.addListener((notificationId) => {
+      if (notificationId === `webcheck-${task.id}`) {
+        // Открываем страницу для просмотра изменений
+        browser.tabs.create({
+          url: browser.runtime.getURL(`src/ui/popup/pages/ViewChanges.html?id=${task.id}`)
+        }).catch(error => {
+          console.error('[MONITOR] Error opening view changes page:', error)
+        })
+        
+        // Закрываем уведомление
+        browser.notifications.clear(notificationId).catch(() => {})
+      }
+    })
+    
+    // Автоматическое закрытие уведомления по таймауту
+    setTimeout(() => {
+      browser.notifications.clear(`webcheck-${task.id}`).catch(() => {})
+    }, NOTIFICATION_TIMEOUT)
+  } catch (error) {
+    console.error('[MONITOR] Error in showNotification:', error)
+  }
 }
 
 /**
