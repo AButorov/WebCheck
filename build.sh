@@ -177,6 +177,69 @@ post_build_processing() {
     print -P "${RED}Ошибка: Исходный файл не найден: $src${NC}"
     exit 1
   fi
+
+  # Создание или замена иконок стандартными изображениями
+  print -P "${CYAN}Создание стандартных иконок...${NC}"
+
+  # Гарантируем, что директория существует
+  mkdir -p dist/icons
+  
+  # Создаем базовые иконки с помощью функции create_icon
+  create_icon() {
+    local size=$1
+    local color="#4F46E5" # Синий цвет по умолчанию
+    local changed=$2
+    local output_path=$3
+    
+    if [[ "$changed" = "true" ]]; then
+      color="#F59E0B" # Желтый цвет для измененных иконок
+    fi
+    
+    # Создаем SVG иконку на лету
+    local bg_color="white"
+    local svg="<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"no\"?>
+<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"$size\" height=\"$size\" viewBox=\"0 0 24 24\" fill=\"$bg_color\" stroke=\"$color\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\">
+  <circle cx=\"12\" cy=\"12\" r=\"10\" fill=\"$bg_color\" stroke=\"$color\" stroke-width=\"2\"></circle>
+  <line x1=\"12\" y1=\"8\" x2=\"12\" y2=\"12\" stroke=\"$color\" stroke-width=\"2\"></line>
+  <line x1=\"12\" y1=\"16\" x2=\"12\" y2=\"16\" stroke=\"$color\" stroke-width=\"2\"></line>
+</svg>"
+    
+    # Записываем во временный SVG файл
+    local temp_svg=$(mktemp)
+    echo $svg > "$temp_svg"
+    
+    # Проверяем, есть ли ImageMagick и определяем подходящую команду
+    if command -v magick >/dev/null 2>&1; then
+      # ImageMagick v7+
+      magick "$temp_svg" "$output_path"
+      print -P "${GREEN}✓ Создана иконка: $output_path${NC}"
+    elif command -v convert >/dev/null 2>&1; then
+      # ImageMagick v6 или ранее
+      convert -background none "$temp_svg" "$output_path"
+      print -P "${GREEN}✓ Создана иконка: $output_path${NC}"
+    else
+      # Если ImageMagick нет, просто копируем SVG как есть
+      cp "$temp_svg" "${output_path%.png}.svg"
+      print -P "${YELLOW}✓ ImageMagick не найден, создана SVG иконка: ${output_path%.png}.svg${NC}"
+    fi
+    
+    # Удаляем временный файл
+    rm "$temp_svg"
+  }
+  
+  # Создаем стандартные иконки
+  create_icon 16 false "dist/icons/icon-16.png"
+  create_icon 32 false "dist/icons/icon-32.png"
+  create_icon 48 false "dist/icons/icon-48.png"
+  create_icon 128 false "dist/icons/icon-128.png"
+  
+  # Создаем иконки измененного состояния
+  create_icon 16 true "dist/icons/icon-changed-16.png"
+  create_icon 32 true "dist/icons/icon-changed-32.png"
+  create_icon 48 true "dist/icons/icon-changed-48.png"
+  create_icon 128 true "dist/icons/icon-changed-128.png"
+  
+  print -P "${GREEN}✓ Все иконки созданы${NC}"
 }
 
 fix_manifest() {

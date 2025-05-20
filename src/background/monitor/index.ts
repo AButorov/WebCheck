@@ -1,0 +1,318 @@
+/**
+ * Система фонового мониторинга для Web Check
+ * 
+ * Этот модуль отвечает за:
+ * 1. Планирование проверок задач мониторинга
+ * 2. Выполнение проверок элементов на веб-страницах
+ * 3. Сравнение текущего состояния с предыдущим
+ * 4. Генерацию уведомлений при обнаружении изменений
+ * 5. Обновление статуса задач в хранилище
+ */
+
+import browser from 'webextension-polyfill'
+import { WebCheckTask, TaskInterval } from '~/types/task'
+import { getStorageLocal, setStorageLocal } from '~/utils/browser-storage'
+import { CHECK_INTERVALS, NOTIFICATION_TYPES, NOTIFICATION_TIMEOUT } from '~/utils/constants'
+import { checkElement } from './element-checker'
+import { updateBadge } from './badge'
+
+// Имя аларма для планирования проверок
+const CHECK_ALARM_NAME = 'web-check-monitor'
+
+// Лимит на количество одновременных проверок
+const MAX_CONCURRENT_CHECKS = 3
+
+// Очередь задач для проверки
+let checkQueue: string[] = []
+
+// Флаг для отслеживания активности проверок
+let isChecking = false
+
+/**
+ * Инициализация системы мониторинга
+ */
+export function initMonitor() {
+  console.log('[MONITOR] Initializing background monitoring system')
+  
+  // Настройка периодической проверки (каждую минуту)
+  setupAlarm()
+  
+  // Обработчик для аларма
+  browser.alarms.onAlarm.addListener(handleAlarm)
+  
+  // Обработчик запуска браузера для возобновления мониторинга
+  browser.runtime.onStartup.addListener(handleBrowserStartup)
+  
+  // Сразу обновляем бейдж на основе текущего состояния
+  updateBadgeFromStorage()
+  
+  console.log('[MONITOR] Background monitoring system initialized')
+}
+
+/**
+ * Настройка аларма для периодических проверок
+ */
+function setupAlarm() {
+  // Удаляем существующий аларм, если он есть
+  browser.alarms.clear(CHECK_ALARM_NAME).then(() => {
+    // Создаем новый аларм с интервалом в 1 минуту
+    browser.alarms.create(CHECK_ALARM_NAME, {
+      periodInMinutes: 1
+    })
+    console.log('[MONITOR] Alarm scheduled for periodic checks')
+  })
+}
+
+/**
+ * Обработчик аларма для запуска проверки задач
+ */
+async function handleAlarm(alarm: browser.Alarms.Alarm) {
+  if (alarm.name === CHECK_ALARM_NAME) {
+    console.log('[MONITOR] Alarm triggered, checking for tasks to update')
+    await checkDueTasksForUpdates()
+  }
+}
+
+/**
+ * Обработчик события запуска браузера
+ */
+async function handleBrowserStartup() {
+  console.log('[MONITOR] Browser started, resuming monitoring')
+  
+  // Восстанавливаем мониторинг для активных задач
+  const tasks = await getStorageLocal('tasks', [] as WebCheckTask[])
+  
+  // Обновляем бейдж на основе текущих данных
+  updateBadgeFromTasks(tasks)
+  
+  console.log(`[MONITOR] Loaded ${tasks.length} tasks from storage`)
+}
+
+/**
+ * Проверка задач, для которых наступило время обновления
+ */
+export async function checkDueTasksForUpdates() {
+  if (isChecking) {
+    console.log('[MONITOR] Check already in progress, skipping')
+    return
+  }
+  
+  console.log('[MONITOR] Checking for tasks due for update')
+  isChecking = true
+  
+  try {
+    // Получаем задачи из хранилища
+    const tasks = await getStorageLocal('tasks', [] as WebCheckTask[])
+    
+    // Проверяем, что tasks действительно массив
+    if (!Array.isArray(tasks)) {
+      console.error('[MONITOR] Tasks is not an array:', tasks)
+      isChecking = false
+      return
+    }
+    
+    // Проверяем, нужно ли обновить какие-либо задачи
+    const now = Date.now()
+    const tasksToCheck = tasks.filter(task => {
+      // Пропускаем приостановленные задачи
+      if (task.status === 'paused') {
+        return false
+      }
+      
+      // Определяем интервал проверки в миллисекундах
+      const intervalMs = getIntervalInMs(task.interval)
+      
+      // Проверяем, прошло ли достаточно времени с последней проверки
+      return now - task.lastCheckedAt >= intervalMs
+    })
+    
+    if (tasksToCheck.length > 0) {
+      console.log(`[MONITOR] Found ${tasksToCheck.length} tasks to check`)
+      
+      // Добавляем все задачи в очередь
+      checkQueue = checkQueue.concat(tasksToCheck.map(task => task.id))
+      
+      // Запускаем процесс проверки
+      processCheckQueue()
+    } else {
+      console.log('[MONITOR] No tasks due for update')
+      isChecking = false
+    }
+  } catch (error) {
+    console.error('[MONITOR] Error checking tasks for updates:', error)
+    isChecking = false
+  }
+}
+
+/**
+ * Обработка очереди проверок
+ */
+async function processCheckQueue() {
+  // Если очередь пуста или проверка не активна, выходим
+  if (checkQueue.length === 0 || !isChecking) {
+    console.log('[MONITOR] Check queue empty or checking disabled')
+    isChecking = false
+    return
+  }
+  
+  // Получаем задачи из хранилища
+  const tasks = await getStorageLocal('tasks', [] as WebCheckTask[])
+  
+  // Создаем массив промисов для параллельной обработки
+  const checkPromises: Promise<void>[] = []
+  
+  // Проверяем до MAX_CONCURRENT_CHECKS задач одновременно
+  while (checkQueue.length > 0 && checkPromises.length < MAX_CONCURRENT_CHECKS) {
+    const taskId = checkQueue.shift()
+    if (!taskId) continue
+    
+    const task = tasks.find(t => t.id === taskId)
+    if (!task) continue
+    
+    // Добавляем промис проверки в массив
+    checkPromises.push(checkTaskForChanges(task))
+  }
+  
+  // Ждем завершения всех проверок
+  await Promise.all(checkPromises)
+  
+  // Если в очереди остались задачи, продолжаем обработку
+  if (checkQueue.length > 0) {
+    processCheckQueue()
+  } else {
+    console.log('[MONITOR] All tasks checked')
+    isChecking = false
+  }
+}
+
+/**
+ * Проверка одной задачи на наличие изменений
+ */
+async function checkTaskForChanges(task: WebCheckTask): Promise<void> {
+  console.log(`[MONITOR] Checking task: ${task.id} (${task.title})`)
+  
+  try {
+    // Проверяем элемент
+    const result = await checkElement(task.url, task.selector)
+    
+    // Флаг наличия изменений
+    let hasChanges = false
+    
+    // Если успешно получен HTML
+    if (result.html) {
+      // Сравниваем с сохраненным HTML
+      hasChanges = result.html !== task.currentHtml
+      
+      // Обновляем задачу
+      const now = Date.now()
+      const updates: Partial<WebCheckTask> = {
+        lastCheckedAt: now
+      }
+      
+      // Если есть изменения
+      if (hasChanges) {
+        console.log(`[MONITOR] Changes detected for task: ${task.id}`)
+        updates.status = 'changed'
+        updates.currentHtml = result.html
+        updates.lastChangedAt = now
+        
+        // Показываем уведомление
+        showNotification(task, result.html)
+      }
+      
+      // Сохраняем обновления
+      await updateTask(task.id, updates)
+      
+      // Обновляем бейдж
+      updateBadgeFromStorage()
+    } else if (result.error) {
+      console.error(`[MONITOR] Error checking task ${task.id}:`, result.error)
+    }
+  } catch (error) {
+    console.error(`[MONITOR] Failed to check task ${task.id}:`, error)
+  }
+}
+
+/**
+ * Показ уведомления об изменении
+ */
+function showNotification(task: WebCheckTask, newHtml: string) {
+  // Создаем уведомление
+  browser.notifications.create(`webcheck-${task.id}`, {
+    type: 'basic',
+    iconUrl: browser.runtime.getURL('assets/icons/icon-changed-48.png'),
+    title: 'Обнаружены изменения',
+    message: `Страница "${task.title}" была изменена`,
+    priority: 2
+  })
+  
+  // Обработчик клика по уведомлению
+  browser.notifications.onClicked.addListener((notificationId) => {
+    if (notificationId === `webcheck-${task.id}`) {
+      // Открываем страницу для просмотра изменений
+      browser.tabs.create({
+        url: browser.runtime.getURL(`ui/popup/pages/ViewChanges.html?id=${task.id}`)
+      })
+      
+      // Закрываем уведомление
+      browser.notifications.clear(notificationId)
+    }
+  })
+}
+
+/**
+ * Обновление задачи в хранилище
+ */
+async function updateTask(taskId: string, updates: Partial<WebCheckTask>) {
+  const tasks = await getStorageLocal('tasks', [] as WebCheckTask[])
+  
+  // Находим и обновляем задачу
+  const updatedTasks = tasks.map(task => {
+    if (task.id === taskId) {
+      return { ...task, ...updates }
+    }
+    return task
+  })
+  
+  // Сохраняем обновленные задачи
+  await setStorageLocal('tasks', updatedTasks)
+}
+
+/**
+ * Получение интервала в миллисекундах
+ */
+function getIntervalInMs(interval: TaskInterval): number {
+  switch (interval) {
+    case '10s':
+      return CHECK_INTERVALS.TEN_SECONDS.milliseconds
+    case '15m':
+      return CHECK_INTERVALS.FIFTEEN_MINUTES.milliseconds
+    case '1h':
+      return CHECK_INTERVALS.ONE_HOUR.milliseconds
+    case '3h':
+      return CHECK_INTERVALS.THREE_HOURS.milliseconds
+    case '1d':
+      return CHECK_INTERVALS.ONE_DAY.milliseconds
+    default:
+      return CHECK_INTERVALS.ONE_HOUR.milliseconds
+  }
+}
+
+/**
+ * Обновление бейджа на основе данных из хранилища
+ */
+async function updateBadgeFromStorage() {
+  const tasks = await getStorageLocal('tasks', [] as WebCheckTask[])
+  updateBadgeFromTasks(tasks)
+}
+
+/**
+ * Обновление бейджа на основе списка задач
+ */
+function updateBadgeFromTasks(tasks: WebCheckTask[]) {
+  // Подсчитываем количество задач с изменениями
+  const changedTasksCount = tasks.filter(task => task.status === 'changed').length
+  
+  // Обновляем бейдж
+  updateBadge(changedTasksCount)
+}

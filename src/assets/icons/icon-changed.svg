@@ -1,0 +1,6 @@
+<!-- Иконка для состояния изменения в SVG формате -->
+<svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="48" height="48" rx="8" fill="#FFF8E1"/>
+  <path d="M24 4C12.95 4 4 12.95 4 24C4 35.05 12.95 44 24 44C35.05 44 44 35.05 44 24C44 12.95 35.05 4 24 4Z" fill="#FFB300"/>
+  <path d="M21 32.75L12.25 24L14.375 21.875L21 28.5L33.625 15.875L35.75 18L21 32.75Z" fill="#FFFFFF"/>
+</svg>

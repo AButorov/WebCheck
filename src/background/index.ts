@@ -6,6 +6,9 @@ import { MessagePayloads } from '~/types/messages'
 // Импортируем модуль захвата элементов
 import './capture'
 
+// Импортируем и инициализируем систему мониторинга
+import { initMonitor, checkDueTasksForUpdates } from './monitor'
+
 // Обработка установки расширения
 browser.runtime.onInstalled.addListener(({ reason }) => {
   if (reason === 'install') {
@@ -13,12 +16,17 @@ browser.runtime.onInstalled.addListener(({ reason }) => {
   }
 })
 
-// Обработка сообщений
+// Инициализируем мониторинг при запуске фонового скрипта
+initMonitor()
+
+// Обработка сообщений для ручной проверки изменений
 onMessage('check-for-changes', async (message) => {
   const { data } = message;
   const { taskId, tabId } = data as MessagePayloads['check-for-changes'];
   console.log(`Checking for changes for task ${taskId} in tab ${tabId}`)
-  // Реализация проверки изменений будет добавлена позже
+  
+  // Запускаем проверку задач, у которых наступило время обновления
+  await checkDueTasksForUpdates()
 })
 
 // Обработка уведомлений
@@ -29,52 +37,42 @@ onMessage('show-notification', async (message) => {
   // Создаем уведомление
   browser.notifications.create({
     type: 'basic',
-    iconUrl: browser.runtime.getURL('src/assets/icons/icon-128.png'),
+    iconUrl: browser.runtime.getURL('assets/icons/icon-128.png'),
     title,
     message: notificationMessage,
   })
 })
 
-// Настройка алармов для периодической проверки
-browser.alarms.create('check-tasks', { periodInMinutes: 5 })
-
-browser.alarms.onAlarm.addListener(async (alarm) => {
-  if (alarm.name === 'check-tasks') {
-    // Получение задач из хранилища
+// Обработка запросов на проверку элемента
+onMessage('check-element', async (message) => {
+  const { data, sender } = message;
+  const { taskId, selector } = data as MessagePayloads['check-element'];
+  console.log(`Received check-element request for task ${taskId} with selector ${selector}`)
+  
+  try {
+    // Получаем задачу из хранилища
     const storage = await browser.storage.local.get('tasks')
     const tasks = storage.tasks || []
+    const task = tasks.find((t: WebCheckTask) => t.id === taskId)
     
-    // Проверка задач, которые нужно обновить
-    const now = Date.now()
-    const tasksToCheck = tasks.filter((task: WebCheckTask) => {
-      if (task.status === 'paused') return false
-      
-      // Определение интервала проверки в миллисекундах
-      let intervalMs = 60 * 60 * 1000 // По умолчанию 1 час
-      
-      switch (task.interval) {
-        case '15m':
-          intervalMs = 15 * 60 * 1000
-          break
-        case '1h':
-          intervalMs = 60 * 60 * 1000
-          break
-        case '3h':
-          intervalMs = 3 * 60 * 60 * 1000
-          break
-        case '1d':
-          intervalMs = 24 * 60 * 60 * 1000
-          break
-      }
-      
-      // Проверяем, прошло ли достаточно времени с последней проверки
-      return now - task.lastCheckedAt >= intervalMs
-    })
+    if (!task) {
+      console.error(`Task with ID ${taskId} not found`)
+      return { taskId, error: 'Task not found' }
+    }
     
-    // Выполнение проверок
-    for (const task of tasksToCheck) {
-      console.log(`Scheduled check for task: ${task.id}`)
-      // Логика проверки будет добавлена позже
+    // Проверяем элемент с использованием модуля element-checker
+    // (на этом этапе просто возвращаем заглушку)
+    // В реальной реализации будет использоваться функция checkElement из ./monitor/element-checker
+    
+    return {
+      taskId,
+      html: task.currentHtml, // В реальной реализации здесь будет результат проверки
+    }
+  } catch (error) {
+    console.error('Error checking element:', error)
+    return {
+      taskId,
+      error: error instanceof Error ? error.message : String(error)
     }
   }
 })

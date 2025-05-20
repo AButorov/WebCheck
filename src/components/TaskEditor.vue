@@ -54,6 +54,7 @@
           v-model="editedTask.interval" 
           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-[#3e66fb] focus:border-[#3e66fb]"
         >
+          <option value="10s">Каждые 10 секунд (отладка)</option>
           <option value="15m">Каждые 15 минут</option>
           <option value="1h">Каждый час</option>
           <option value="3h">Каждые 3 часа</option>

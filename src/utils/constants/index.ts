@@ -41,6 +41,11 @@ export const COLORS = {
 
 // Интервалы проверки
 export const CHECK_INTERVALS = {
+  TEN_SECONDS: {
+    value: '10s',
+    label: '10с',
+    milliseconds: 10 * 1000
+  },
   FIFTEEN_MINUTES: {
     value: '15m',
     label: '15м',
