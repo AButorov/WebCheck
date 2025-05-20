@@ -2,8 +2,8 @@
 set -euo pipefail
 
 # Универсальный скрипт сборки Web Check (Manifest V3)
-# Полная версия с исправлением ошибки element-selector.js
-# Последнее обновление: 25.03.2024
+# Расширенная версия с интеграцией генерации иконок
+# Последнее обновление: 21.05.2025
 
 # Цвета для вывода
 RED='\033[0;31m'
@@ -17,6 +17,7 @@ NC='\033[0m'
 typeset MODE="production"
 typeset CSP_COMPATIBLE=true
 typeset DEBUG=false
+typeset GENERATE_ICONS=false
 
 # Обработка аргументов
 for arg in "$@"; do
@@ -29,6 +30,9 @@ for arg in "$@"; do
     MODE="development"
     DEBUG=true
     ;;
+  icons)
+    GENERATE_ICONS=true
+    ;;
   *)
     print -P "${RED}Ошибка: Неизвестный аргумент: %s${NC}" "$arg"
     exit 1
@@ -38,7 +42,7 @@ done
 
 # Заголовок
 print -P "${BLUE}================================================================${NC}"
-print -P "${BLUE}         Web Check - Улучшенный скрипт сборки                  ${NC}"
+print -P "${BLUE}         Web Check - Универсальный скрипт сборки                ${NC}"
 print -P "${BLUE}================================================================${NC}"
 print -P "${YELLOW}Режим сборки: $MODE${NC}"
 
@@ -162,6 +166,147 @@ check_csp_compatibility() {
   print -P "${GREEN}✓ CSP-совместимость проверена${NC}"
 }
 
+# Функция для генерации иконок
+generate_icons() {
+  print -P "\n${CYAN}Генерация иконок для расширения...${NC}"
+
+  # Проверка наличия базовых SVG иконок
+  if [[ ! -d "public/icons" ]]; then
+    mkdir -p "public/icons"
+    print -P "${GREEN}✓ Создана директория public/icons${NC}"
+  fi
+
+  # Создание базовых SVG-иконок если их нет
+  if [[ ! -f "public/icons/icon.svg" ]]; then
+    cat > "public/icons/icon.svg" << EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="128" height="128" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
+  <rect width="128" height="128" fill="white"/>
+  <rect x="16" y="16" width="96" height="96" rx="8" fill="#4285F4"/>
+  <path d="M85.3,42.7l-28,28l-14.7-14.7l-5.3,5.3l20,20l33.3-33.3L85.3,42.7z" fill="white"/>
+</svg>
+EOF
+    print -P "${GREEN}✓ Создана базовая SVG иконка${NC}"
+  fi
+
+  if [[ ! -f "public/icons/icon-changed.svg" ]]; then
+    cat > "public/icons/icon-changed.svg" << EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="128" height="128" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
+  <rect width="128" height="128" fill="white"/>
+  <rect x="16" y="16" width="96" height="96" rx="8" fill="#EA4335"/>
+  <path d="M85.3,42.7l-28,28l-14.7-14.7l-5.3,5.3l20,20l33.3-33.3L85.3,42.7z" fill="white"/>
+</svg>
+EOF
+    print -P "${GREEN}✓ Создана SVG иконка для состояния с изменениями${NC}"
+  fi
+
+  # Определение метода конвертации
+  CONVERT_CMD=""
+  if command -v magick &> /dev/null; then
+    print -P "${GREEN}✓ Найдена команда 'magick' (ImageMagick v7+)${NC}"
+    CONVERT_CMD="magick"
+  elif command -v convert &> /dev/null; then
+    print -P "${GREEN}✓ Найдена команда 'convert' (ImageMagick v6 или ниже)${NC}"
+    CONVERT_CMD="convert"
+  else
+    print -P "${YELLOW}⚠️ ImageMagick не найден. Используем SVG-заглушки${NC}"
+    # Создание символических ссылок
+    for SIZE in 16 32 48 128; do
+      # Создание директорий для разных размеров
+      mkdir -p "public/icons/$SIZE"
+      
+      # Копирование SVG файлов для разных размеров
+      cp "public/icons/icon.svg" "public/icons/$SIZE/icon-$SIZE.svg"
+      cp "public/icons/icon-changed.svg" "public/icons/$SIZE/icon-changed-$SIZE.svg"
+      
+      # Создание символических ссылок на PNG
+      ln -sf "$SIZE/icon-$SIZE.svg" "public/icons/icon-$SIZE.png"
+      ln -sf "$SIZE/icon-changed-$SIZE.svg" "public/icons/icon-changed-$SIZE.png"
+    done
+    print -P "${GREEN}✓ Созданы SVG-заглушки для всех размеров${NC}"
+    return 0
+  fi
+
+  # Конвертация иконок с помощью ImageMagick
+  for SIZE in 16 32 48 128; do
+    # Создание директорий для разных размеров
+    mkdir -p "public/icons/$SIZE"
+    
+    # Конвертация обычной иконки
+    if [[ "$CONVERT_CMD" == "magick" ]]; then
+      # ImageMagick v7+ синтаксис
+      $CONVERT_CMD "public/icons/icon.svg" -background none -resize ${SIZE}x${SIZE} "public/icons/icon-$SIZE.png"
+    else
+      # ImageMagick v6 и ниже
+      $CONVERT_CMD -background none -resize ${SIZE}x${SIZE} "public/icons/icon.svg" "public/icons/icon-$SIZE.png"
+    fi
+    print -P "${GREEN}✓ Создана иконка icon-$SIZE.png${NC}"
+    
+    # Конвертация иконки с изменениями
+    if [[ "$CONVERT_CMD" == "magick" ]]; then
+      # ImageMagick v7+ синтаксис
+      $CONVERT_CMD "public/icons/icon-changed.svg" -background none -resize ${SIZE}x${SIZE} "public/icons/icon-changed-$SIZE.png"
+    else
+      # ImageMagick v6 и ниже
+      $CONVERT_CMD -background none -resize ${SIZE}x${SIZE} "public/icons/icon-changed.svg" "public/icons/icon-changed-$SIZE.png"
+    fi
+    print -P "${GREEN}✓ Создана иконка icon-changed-$SIZE.png${NC}"
+  done
+
+  print -P "${GREEN}✓ Все иконки успешно сгенерированы${NC}"
+  return 0
+}
+
+# Функция проверки иконок
+check_icons() {
+  print -P "\n${CYAN}Проверка иконок для расширения...${NC}"
+  local ICONS_MISSING=0
+
+  # Проверка наличия базовых SVG-иконок
+  if [[ ! -f "public/icons/icon.svg" ]]; then
+    print -P "${YELLOW}⚠️ Отсутствует базовая SVG иконка${NC}"
+    ICONS_MISSING=$((ICONS_MISSING + 1))
+  fi
+
+  if [[ ! -f "public/icons/icon-changed.svg" ]]; then
+    print -P "${YELLOW}⚠️ Отсутствует SVG иконка для состояния с изменениями${NC}"
+    ICONS_MISSING=$((ICONS_MISSING + 1))
+  fi
+
+  # Проверка наличия PNG-иконок для всех размеров
+  for SIZE in 16 32 48 128; do
+    if [[ ! -f "public/icons/icon-$SIZE.png" && ! -L "public/icons/icon-$SIZE.png" ]]; then
+      print -P "${YELLOW}⚠️ Отсутствует иконка icon-$SIZE.png${NC}"
+      ICONS_MISSING=$((ICONS_MISSING + 1))
+    fi
+    
+    if [[ ! -f "public/icons/icon-changed-$SIZE.png" && ! -L "public/icons/icon-changed-$SIZE.png" ]]; then
+      print -P "${YELLOW}⚠️ Отсутствует иконка icon-changed-$SIZE.png${NC}"
+      ICONS_MISSING=$((ICONS_MISSING + 1))
+    fi
+  done
+
+  # Предложение сгенерировать иконки если они отсутствуют
+  if [[ $ICONS_MISSING -gt 0 ]]; then
+    print -P "${YELLOW}Обнаружено отсутствующих иконок: $ICONS_MISSING${NC}"
+    if [[ "$GENERATE_ICONS" == "false" ]]; then
+      print -P "${YELLOW}Хотите сгенерировать иконки сейчас? (y/n) ${NC}"
+      read -r response
+      if [[ "$response" =~ ^[Yy]$ ]]; then
+        generate_icons
+      else
+        print -P "${YELLOW}Продолжаем без генерации иконок...${NC}"
+      fi
+    else
+      print -P "${GREEN}Автоматическая генерация иконок...${NC}"
+      generate_icons
+    fi
+  else
+    print -P "${GREEN}✓ Все иконки в наличии${NC}"
+  fi
+}
+
 post_build_processing() {
   print -P "\n${CYAN}Пост-обработка файлов...${NC}"
 
@@ -177,69 +322,56 @@ post_build_processing() {
     print -P "${RED}Ошибка: Исходный файл не найден: $src${NC}"
     exit 1
   fi
-
-  # Создание или замена иконок стандартными изображениями
-  print -P "${CYAN}Создание стандартных иконок...${NC}"
-
-  # Гарантируем, что директория существует
-  mkdir -p dist/icons
   
-  # Создаем базовые иконки с помощью функции create_icon
-  create_icon() {
-    local size=$1
-    local color="#4F46E5" # Синий цвет по умолчанию
-    local changed=$2
-    local output_path=$3
-    
-    if [[ "$changed" = "true" ]]; then
-      color="#F59E0B" # Желтый цвет для измененных иконок
-    fi
-    
-    # Создаем SVG иконку на лету
-    local bg_color="white"
-    local svg="<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"no\"?>
-<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"$size\" height=\"$size\" viewBox=\"0 0 24 24\" fill=\"$bg_color\" stroke=\"$color\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\">
-  <circle cx=\"12\" cy=\"12\" r=\"10\" fill=\"$bg_color\" stroke=\"$color\" stroke-width=\"2\"></circle>
-  <line x1=\"12\" y1=\"8\" x2=\"12\" y2=\"12\" stroke=\"$color\" stroke-width=\"2\"></line>
-  <line x1=\"12\" y1=\"16\" x2=\"12\" y2=\"16\" stroke=\"$color\" stroke-width=\"2\"></line>
-</svg>"
-    
-    # Записываем во временный SVG файл
-    local temp_svg=$(mktemp)
-    echo $svg > "$temp_svg"
-    
-    # Проверяем, есть ли ImageMagick и определяем подходящую команду
-    if command -v magick >/dev/null 2>&1; then
-      # ImageMagick v7+
-      magick "$temp_svg" "$output_path"
-      print -P "${GREEN}✓ Создана иконка: $output_path${NC}"
-    elif command -v convert >/dev/null 2>&1; then
-      # ImageMagick v6 или ранее
-      convert -background none "$temp_svg" "$output_path"
-      print -P "${GREEN}✓ Создана иконка: $output_path${NC}"
+  # Копирование иконок
+  print -P "${CYAN}Копирование иконок...${NC}"
+  
+  # Создаем директорию для иконок
+  mkdir -p "dist/icons"
+  
+  # Копируем иконки для обычного состояния
+  for SIZE in 16 32 48 128; do
+    if [[ -f "public/icons/icon-${SIZE}.png" ]]; then
+      cp -f "public/icons/icon-${SIZE}.png" "dist/icons/icon-${SIZE}.png"
+      print -P "${GREEN}✓ Скопирована иконка icon-${SIZE}.png${NC}"
+    elif [[ -L "public/icons/icon-${SIZE}.png" ]]; then
+      # Если это символическая ссылка, копируем содержимое
+      cp -L "public/icons/icon-${SIZE}.png" "dist/icons/icon-${SIZE}.png" 2>/dev/null || cp -f "public/icons/icon.svg" "dist/icons/icon-${SIZE}.png"
+      print -P "${GREEN}✓ Скопирована иконка icon-${SIZE}.png (из символической ссылки)${NC}"
     else
-      # Если ImageMagick нет, просто копируем SVG как есть
-      cp "$temp_svg" "${output_path%.png}.svg"
-      print -P "${YELLOW}✓ ImageMagick не найден, создана SVG иконка: ${output_path%.png}.svg${NC}"
+      print -P "${YELLOW}✗ Не найдена иконка icon-${SIZE}.png, используем заглушку${NC}"
+      # Создаем пустую иконку в качестве заглушки если нет ImageMagick
+      if command -v convert &> /dev/null; then
+        convert -size ${SIZE}x${SIZE} xc:transparent "dist/icons/icon-${SIZE}.png" 2>/dev/null || true
+      elif command -v magick &> /dev/null; then
+        magick xc:transparent -size ${SIZE}x${SIZE} "dist/icons/icon-${SIZE}.png" 2>/dev/null || true
+      else
+        cp -f "public/icons/icon.svg" "dist/icons/icon-${SIZE}.png" 2>/dev/null || true
+      fi
     fi
-    
-    # Удаляем временный файл
-    rm "$temp_svg"
-  }
+  done
   
-  # Создаем стандартные иконки
-  create_icon 16 false "dist/icons/icon-16.png"
-  create_icon 32 false "dist/icons/icon-32.png"
-  create_icon 48 false "dist/icons/icon-48.png"
-  create_icon 128 false "dist/icons/icon-128.png"
+  # Копируем иконки для состояния с изменениями
+  for SIZE in 16 32 48 128; do
+    if [[ -f "public/icons/icon-changed-${SIZE}.png" ]]; then
+      cp -f "public/icons/icon-changed-${SIZE}.png" "dist/icons/icon-changed-${SIZE}.png"
+      print -P "${GREEN}✓ Скопирована иконка icon-changed-${SIZE}.png${NC}"
+    elif [[ -L "public/icons/icon-changed-${SIZE}.png" ]]; then
+      # Если это символическая ссылка, копируем содержимое
+      cp -L "public/icons/icon-changed-${SIZE}.png" "dist/icons/icon-changed-${SIZE}.png" 2>/dev/null || cp -f "public/icons/icon-changed.svg" "dist/icons/icon-changed-${SIZE}.png"
+      print -P "${GREEN}✓ Скопирована иконка icon-changed-${SIZE}.png (из символической ссылки)${NC}"
+    else
+      print -P "${YELLOW}✗ Не найдена иконка icon-changed-${SIZE}.png, используем обычную иконку${NC}"
+      # Используем обычную иконку в качестве замены
+      if [[ -f "public/icons/icon-${SIZE}.png" ]]; then
+        cp -f "public/icons/icon-${SIZE}.png" "dist/icons/icon-changed-${SIZE}.png"
+      elif [[ -f "public/icons/icon-changed.svg" ]]; then
+        cp -f "public/icons/icon-changed.svg" "dist/icons/icon-changed-${SIZE}.png"
+      fi
+    fi
+  done
   
-  # Создаем иконки измененного состояния
-  create_icon 16 true "dist/icons/icon-changed-16.png"
-  create_icon 32 true "dist/icons/icon-changed-32.png"
-  create_icon 48 true "dist/icons/icon-changed-48.png"
-  create_icon 128 true "dist/icons/icon-changed-128.png"
-  
-  print -P "${GREEN}✓ Все иконки созданы${NC}"
+  print -P "${GREEN}✓ Иконки скопированы${NC}"
 }
 
 fix_manifest() {
@@ -294,12 +426,21 @@ package_extension() {
 check_requirements
 check_project_structure
 
+if [[ "$GENERATE_ICONS" == "true" ]]; then
+  generate_icons
+else
+  check_icons
+fi
+
 if $CSP_COMPATIBLE; then
   check_csp_compatibility
 fi
 
+print -P "\n${CYAN}Запуск сборки проекта...${NC}"
 rm -rf dist
 pnpm run build
+print -P "${GREEN}✓ Сборка проекта выполнена${NC}"
+
 post_build_processing
 fix_manifest
 
@@ -310,3 +451,9 @@ fi
 print -P "\n${BLUE}================================================================${NC}"
 print -P "${GREEN}Сборка успешно завершена!${NC}"
 print -P "${BLUE}================================================================${NC}"
+
+print -P "${CYAN}Для установки расширения:${NC}"
+print -P "1. Откройте chrome://extensions/"
+print -P "2. Включите режим разработчика"
+print -P "3. Нажмите 'Загрузить распакованное расширение'"
+print -P "4. Выберите папку dist"

@@ -126,9 +126,27 @@ export default defineComponent({
         // Загрузка из хранилища
         const result = await browser.storage.local.get('tasks')
         
-        if (result.tasks && Array.isArray(result.tasks)) {
-          console.log('Tasks loaded:', result.tasks)
-          tasks.value = result.tasks
+        if (result.tasks) {
+          if (Array.isArray(result.tasks)) {
+            console.log('Tasks loaded:', result.tasks)
+            tasks.value = [...result.tasks] // Создаем копию массива
+          } else if (typeof result.tasks === 'object') {
+            // Если это объект, преобразуем его в массив
+            console.warn('Tasks is an object, not an array. Converting to array:', result.tasks)
+            const tasksArray = Object.values(result.tasks)
+            if (Array.isArray(tasksArray)) {
+              tasks.value = tasksArray
+              // Сразу сохраняем в правильном формате
+              await browser.storage.local.set({ tasks: tasksArray })
+              console.log('Converted tasks saved back to storage as array')
+            } else {
+              console.error('Failed to convert tasks to array')
+              tasks.value = []
+            }
+          } else {
+            console.log('tasks is neither array nor object:', typeof result.tasks)
+            tasks.value = []
+          }
         } else {
           console.log('No tasks found')
           tasks.value = []
@@ -145,8 +163,20 @@ export default defineComponent({
     // Сохранение задач
     async function saveTasks() {
       try {
-        await browser.storage.local.set({ tasks: tasks.value })
-        console.log('Tasks saved')
+        console.log('Saving tasks (length=' + tasks.value.length + '):', tasks.value)
+        
+        // Проверяем, что задачи - это массив
+        if (!Array.isArray(tasks.value)) {
+          console.error('tasks.value is not an array:', tasks.value)
+          return
+        }
+        
+        // Создаем копию массива, чтобы избежать проблем с сериализацией
+        const tasksCopy = [...tasks.value]
+        
+        // Явно указываем копию массива
+        await browser.storage.local.set({ tasks: tasksCopy })
+        console.log('Tasks saved successfully')
       } catch (err) {
         console.error('Error saving tasks:', err)
         error.value = 'Не удалось сохранить задачи'
