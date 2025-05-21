@@ -186,28 +186,31 @@ async function processCheckQueue() {
 }
 
 /**
- * Проверка одной задачи на наличие изменений
+ * Проверка одной задачи на наличие изменений с улучшенной обработкой ошибок
  */
 async function checkTaskForChanges(task: WebCheckTask): Promise<void> {
   console.log(`[MONITOR] Checking task: ${task.id} (${task.title})`)
   
   try {
-    // Проверяем элемент
-    const result = await checkElement(task.url, task.selector)
+    // Проверяем элемент с повторными попытками (3 попытки по умолчанию)
+    const result = await checkElement(task.url, task.selector, 3)
     
     // Флаг наличия изменений
     let hasChanges = false
     
+    // Всегда обновляем время последней проверки
+    const now = Date.now()
+    const updates: Partial<WebCheckTask> = {
+      lastCheckedAt: now
+    }
+    
     // Если успешно получен HTML
     if (result.html) {
+      // Сбрасываем счетчик ошибок, если он был
+      updates.consecutiveErrors = 0
+      
       // Сравниваем с сохраненным HTML
       hasChanges = result.html !== task.currentHtml
-      
-      // Обновляем задачу
-      const now = Date.now()
-      const updates: Partial<WebCheckTask> = {
-        lastCheckedAt: now
-      }
       
       // Если есть изменения
       if (hasChanges) {
@@ -218,18 +221,53 @@ async function checkTaskForChanges(task: WebCheckTask): Promise<void> {
         
         // Показываем уведомление
         showNotification(task, result.html)
+      } else if (task.status === 'error') {
+        // Если раньше была ошибка, а теперь нет - восстанавливаем статус
+        updates.status = 'active'
       }
-      
-      // Сохраняем обновления
-      await updateTask(task.id, updates)
-      
-      // Обновляем бейдж
-      updateBadgeFromStorage()
     } else if (result.error) {
       console.error(`[MONITOR] Error checking task ${task.id}:`, result.error)
+      
+      // Обновляем информацию об ошибке
+      updates.lastError = result.error
+      updates.lastErrorTime = now
+      
+      // Увеличиваем счетчик последовательных ошибок
+      const currentConsecutiveErrors = task.consecutiveErrors || 0
+      updates.consecutiveErrors = currentConsecutiveErrors + 1
+      
+      // Если ошибка повторяется много раз, меняем статус на "error"
+      if (updates.consecutiveErrors >= 5) {
+        updates.status = 'error'
+      }
     }
+    
+    // Сохраняем обновления в любом случае
+    await updateTask(task.id, updates)
+    
+    // Обновляем бейдж
+    updateBadgeFromStorage()
   } catch (error) {
     console.error(`[MONITOR] Failed to check task ${task.id}:`, error)
+    
+    // Даже если все пошло не так, сохраняем информацию об ошибке
+    try {
+      const updates: Partial<WebCheckTask> = {
+        lastCheckedAt: Date.now(),
+        lastError: error instanceof Error ? error.message : String(error),
+        lastErrorTime: Date.now(),
+        consecutiveErrors: (task.consecutiveErrors || 0) + 1
+      }
+      
+      // Если много повторяющихся ошибок, меняем статус
+      if (updates.consecutiveErrors >= 5) {
+        updates.status = 'error'
+      }
+      
+      await updateTask(task.id, updates)
+    } catch (updateError) {
+      console.error(`[MONITOR] Failed to update task error status:`, updateError)
+    }
   }
 }
 

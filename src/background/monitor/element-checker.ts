@@ -18,52 +18,76 @@ interface CheckResult {
 }
 
 /**
- * Проверяет состояние элемента на веб-странице
+ * Проверяет состояние элемента на веб-странице с поддержкой повторных попыток
  * 
  * @param url URL страницы для проверки
  * @param selector CSS селектор элемента
+ * @param maxRetries Максимальное количество попыток проверки (по умолчанию 3)
  * @returns Объект с HTML содержимым или ошибкой
  */
-export async function checkElement(url: string, selector: string): Promise<CheckResult> {
+export async function checkElement(url: string, selector: string, maxRetries = 3): Promise<CheckResult> {
   console.log(`[ELEMENT CHECKER] Checking element at ${url} with selector: ${selector}`)
   
-  // Создаем скрытую вкладку
-  let tab: browser.Tabs.Tab | null = null
+  let lastError: string | undefined
   
-  try {
-    // Создаем новую вкладку скрыто
-    tab = await browser.tabs.create({
-      url,
-      active: false,
-      pinned: false
-    })
+  // Повторяем попытки несколько раз
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    // Создаем скрытую вкладку
+    let tab: browser.Tabs.Tab | null = null
     
-    console.log(`[ELEMENT CHECKER] Created tab ${tab.id} for checking`)
-    
-    // Ждем загрузки страницы
-    await waitForTabLoad(tab.id!)
-    
-    // Небольшая задержка для гарантированной загрузки страницы
-    await delay(1000)
-    
-    // Извлекаем HTML содержимое элемента
-    const result = await extractElementHtml(tab.id!, selector)
-    
-    return result
-  } catch (error) {
-    console.error('[ELEMENT CHECKER] Error checking element:', error)
-    return { error: error instanceof Error ? error.message : String(error) }
-  } finally {
-    // Закрываем вкладку, если она была создана
-    if (tab && tab.id) {
-      try {
-        await browser.tabs.remove(tab.id)
-        console.log(`[ELEMENT CHECKER] Closed tab ${tab.id}`)
-      } catch (error) {
-        console.error(`[ELEMENT CHECKER] Error closing tab ${tab.id}:`, error)
+    try {
+      // Создаем новую вкладку скрыто
+      tab = await browser.tabs.create({
+        url,
+        active: false,
+        pinned: false
+      })
+      
+      console.log(`[ELEMENT CHECKER] Created tab ${tab.id} for checking`)
+      
+      // Ждем загрузки страницы
+      await waitForTabLoad(tab.id!)
+      
+      // Увеличиваем задержку с каждой попыткой
+      const delayTime = 1000 * attempt
+      console.log(`[ELEMENT CHECKER] Waiting ${delayTime}ms for page to fully render (attempt ${attempt}/${maxRetries})`)
+      await delay(delayTime)
+      
+      // Извлекаем HTML содержимое элемента
+      const result = await extractElementHtml(tab.id!, selector)
+      
+      // Если элемент найден успешно, возвращаем результат
+      if (result.html) {
+        return result
+      }
+      
+      // Запоминаем ошибку для возможного возврата после всех попыток
+      lastError = result.error
+      console.log(`[ELEMENT CHECKER] Attempt ${attempt}/${maxRetries} failed: ${lastError}`)
+      
+    } catch (error) {
+      console.error(`[ELEMENT CHECKER] Error in attempt ${attempt}/${maxRetries}:`, error)
+      lastError = error instanceof Error ? error.message : String(error)
+    } finally {
+      // Закрываем вкладку, если она была создана
+      if (tab && tab.id) {
+        try {
+          await browser.tabs.remove(tab.id)
+          console.log(`[ELEMENT CHECKER] Closed tab ${tab.id}`)
+        } catch (error) {
+          console.error(`[ELEMENT CHECKER] Error closing tab ${tab.id}:`, error)
+        }
       }
     }
+    
+    // Если это была не последняя попытка, делаем паузу перед следующей
+    if (attempt < maxRetries) {
+      await delay(1000)
+    }
   }
+  
+  // Все попытки исчерпаны, возвращаем последнюю ошибку
+  return { error: lastError || 'Failed to check element after multiple attempts' }
 }
 
 /**
@@ -95,7 +119,7 @@ function waitForTabLoad(tabId: number): Promise<void> {
 }
 
 /**
- * Извлечение HTML содержимого элемента
+ * Извлечение HTML содержимого элемента с поддержкой альтернативных селекторов
  * 
  * @param tabId Идентификатор вкладки
  * @param selector CSS селектор элемента
@@ -103,15 +127,54 @@ function waitForTabLoad(tabId: number): Promise<void> {
  */
 async function extractElementHtml(tabId: number, selector: string): Promise<CheckResult> {
   try {
-    // Инжектируем скрипт для извлечения HTML
+    // Инжектируем скрипт для извлечения HTML с поддержкой нескольких стратегий селекторов
     const results = await browser.scripting.executeScript({
       target: { tabId },
       func: (selectorArg) => {
         try {
-          const element = document.querySelector(selectorArg)
+          // Пробуем найти элемент по основному селектору
+          let element = document.querySelector(selectorArg)
+          
+          // Если не найден, пробуем альтернативные варианты
+          if (!element) {
+            // Попробуем найти по частичному соответствию текста/классов
+            if (selectorArg.includes('.')) {
+              // Селектор по классу, пробуем найти элемент с этим классом
+              const className = selectorArg.split('.').pop()?.trim()
+              if (className) {
+                const alternatives = document.getElementsByClassName(className)
+                if (alternatives.length > 0) {
+                  element = alternatives[0]
+                }
+              }
+            } else if (selectorArg.includes('#')) {
+              // Селектор по id, пробуем найти элементы с похожим id
+              const idName = selectorArg.split('#').pop()?.trim()
+              if (idName) {
+                const elements = document.querySelectorAll(`[id*='${idName}']`)
+                if (elements.length > 0) {
+                  element = elements[0]
+                }
+              }
+            }
+            
+            // Если все еще не нашли и селектор выглядит как имя тега с классом или атрибутом
+            if (!element && selectorArg.match(/^[a-z]+(\.|\[)/i)) {
+              const tagName = selectorArg.match(/^[a-z]+/i)?.[0]
+              if (tagName) {
+                // Найти все элементы с этим тегом и посмотреть, есть ли похожие
+                const elements = document.getElementsByTagName(tagName)
+                if (elements.length > 0) {
+                  element = elements[0]
+                }
+              }
+            }
+          }
+          
           if (!element) {
             return { error: `Element not found with selector: ${selectorArg}` }
           }
+          
           return { html: element.outerHTML }
         } catch (error) {
           return { error: String(error) }
