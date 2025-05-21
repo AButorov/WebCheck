@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebCheck Offscreen Document</title>
+    <!-- CSP для Manifest V3 -->
+    <meta http-equiv="Content-Security-Policy" content="script-src 'self'; object-src 'self';">
+</head>
+<body>
+    <div id="offscreen-container" style="display: none;">
+        <!-- Здесь будут создаваться iframe для проверки страниц -->
+    </div>
+    
+    <!-- Подключение скрипта offscreen-документа -->
+    <script src="offscreen.js"></script>
+</body>
+</html>

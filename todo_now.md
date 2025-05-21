@@ -4,15 +4,15 @@
 
 ## 1. Подготовительные шаги
 
-- [ ] **Обновить `manifest.json`**:
-  - [ ] Добавить разрешение `"offscreen"` в массив `permissions`.
-- [ ] **Создать HTML-файл для offscreen-документа**:
-  - [ ] Создать файл `src/offscreen/offscreen.html`.
-  - [ ] Подключить в нем скрипт `src/offscreen/offscreen.js`.
-- [ ] **Создать JavaScript-файл для offscreen-документа**:
-  - [ ] Создать файл `src/offscreen/offscreen.js`.
-- [ ] **Настроить сборку**:
-  - [ ] Убедиться, что `offscreen.html` и `offscreen.js` копируются в директорию `dist/offscreen/` при сборке (обновить `vite.config.js` или ваш скрипт `build.sh`).
+- [x] **Обновить `manifest.json`**:
+  - [x] Добавить разрешение `"offscreen"` в массив `permissions`.
+- [x] **Создать HTML-файл для offscreen-документа**:
+  - [x] Создать файл `src/offscreen/offscreen.html`.
+  - [x] Подключить в нем скрипт `src/offscreen/offscreen.js`.
+- [x] **Создать JavaScript-файл для offscreen-документа**:
+  - [x] Создать файл `src/offscreen/offscreen.js`.
+- [x] **Настроить сборку**:
+  - [x] Убедиться, что `offscreen.html` и `offscreen.js` копируются в директорию `dist/offscreen/` при сборке (обновить `vite.config.js` или ваш скрипт `build.sh`).
 
 ## 2. Управление жизненным циклом offscreen-документа
 

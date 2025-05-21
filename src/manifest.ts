@@ -54,7 +54,8 @@ export default defineManifest(async (env) => ({
     'scripting',
     'activeTab',
     'tabs',
-    'tabCapture'
+    'tabCapture',
+    'offscreen'
   ],
   host_permissions: [
     'http://*/*',

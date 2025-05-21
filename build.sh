@@ -101,6 +101,8 @@ check_project_structure() {
     "src/ui/popup/pages/Index.vue"
     "src/ui/popup/router/index.ts"
     "src/content-script/element-selector.js"
+    "src/offscreen/offscreen.html"
+    "src/offscreen/offscreen.js"
   )
 
   for file in $required_files; do
@@ -120,6 +122,7 @@ check_project_structure() {
     "src/locales"
     "src/stores"
     "src/utils"
+    "src/offscreen"
   )
 
   for dir in $required_dirs; do
@@ -320,6 +323,26 @@ post_build_processing() {
     print -P "${GREEN}✓ Файл element-selector.js скопирован${NC}"
   else
     print -P "${RED}Ошибка: Исходный файл не найден: $src${NC}"
+    exit 1
+  fi
+  
+  # Копирование offscreen файлов
+  print -P "${CYAN}Копирование offscreen файлов...${NC}"
+  mkdir -p dist/offscreen
+  
+  if [[ -f "src/offscreen/offscreen.html" ]]; then
+    cp "src/offscreen/offscreen.html" "dist/offscreen/offscreen.html"
+    print -P "${GREEN}✓ Файл offscreen.html скопирован${NC}"
+  else
+    print -P "${RED}Ошибка: Исходный файл не найден: src/offscreen/offscreen.html${NC}"
+    exit 1
+  fi
+  
+  if [[ -f "src/offscreen/offscreen.js" ]]; then
+    cp "src/offscreen/offscreen.js" "dist/offscreen/offscreen.js"
+    print -P "${GREEN}✓ Файл offscreen.js скопирован${NC}"
+  else
+    print -P "${RED}Ошибка: Исходный файл не найден: src/offscreen/offscreen.js${NC}"
     exit 1
   fi
   
