@@ -6,15 +6,27 @@
 
 // Константы для работы offscreen-документа
 const OFFSCREEN_CONFIG = {
-  IFRAME_LOAD_TIMEOUT: 15000, // 15 секунд на загрузку iframe
-  CONTENT_EXTRACTION_TIMEOUT: 10000, // 10 секунд на извлечение контента
+  IFRAME_LOAD_TIMEOUT: 20000, // 20 секунд на загрузку iframe
+  CONTENT_EXTRACTION_TIMEOUT: 15000, // 15 секунд на извлечение контента
   MAX_CONCURRENT_IFRAMES: 1, // Максимальное количество одновременных iframe
-  CLEANUP_DELAY: 1000 // Задержка перед удалением iframe
+  CLEANUP_DELAY: 2000, // Задержка перед удалением iframe
+  MAX_RETRY_ATTEMPTS: 2, // Максимальное количество попыток повтора
+  RETRY_DELAY: 1000 // Задержка между попытками
 }
 
 // Хранилище активных iframe
 const activeIframes = new Map()
 let iframeCounter = 0
+
+// Статистика offscreen-документа
+const stats = {
+  totalRequests: 0,
+  successfulRequests: 0,
+  failedRequests: 0,
+  timeouts: 0,
+  averageProcessingTime: 0,
+  startTime: Date.now()
+}
 
 /**
  * Обработчик сообщений от Service Worker
@@ -34,7 +46,20 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return true // Указываем, что будем отвечать асинхронно
       
     case 'PING':
-      sendResponse({ status: 'alive' })
+      sendResponse({ 
+        status: 'alive',
+        uptime: Date.now() - stats.startTime,
+        stats: { ...stats }
+      })
+      return false
+      
+    case 'GET_STATS':
+      sendResponse({
+        status: 'alive',
+        stats: { ...stats },
+        activeIframes: activeIframes.size,
+        config: { ...OFFSCREEN_CONFIG }
+      })
       return false
       
     default:
@@ -49,8 +74,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
  */
 async function handleUrlProcessing(message, sendResponse) {
   const { url, selector, requestId } = message
+  const startTime = Date.now()
+  
+  // Обновляем статистику
+  stats.totalRequests++
   
   if (!url || !selector) {
+    stats.failedRequests++
     sendResponse({ 
       error: 'Отсутствуют обязательные параметры: url или selector',
       requestId 
@@ -60,37 +90,66 @@ async function handleUrlProcessing(message, sendResponse) {
   
   console.log(`[Offscreen] Начинаем обработку URL: ${url}, селектор: ${selector}`)
   
-  try {
-    // Создаем iframe для загрузки страницы
-    const iframe = await createIframe(url, requestId)
-    
-    // Ожидаем загрузки iframe
-    await waitForIframeLoad(iframe)
-    
-    // Извлекаем контент с помощью content script
-    const content = await extractContentFromIframe(iframe, selector, requestId)
-    
-    // Отправляем результат
-    sendResponse({
-      success: true,
-      content,
-      requestId,
-      timestamp: Date.now()
-    })
-    
-  } catch (error) {
-    console.error('[Offscreen] Ошибка при обработке URL:', error)
-    sendResponse({
-      error: error.message,
-      requestId,
-      timestamp: Date.now()
-    })
-  } finally {
-    // Очищаем iframe через некоторое время
-    setTimeout(() => {
-      cleanupIframe(requestId)
-    }, OFFSCREEN_CONFIG.CLEANUP_DELAY)
+  let attempt = 0
+  let lastError = null
+  
+  while (attempt < OFFSCREEN_CONFIG.MAX_RETRY_ATTEMPTS) {
+    try {
+      attempt++
+      console.log(`[Offscreen] Попытка ${attempt}/${OFFSCREEN_CONFIG.MAX_RETRY_ATTEMPTS} для ${url}`)
+      
+      // Создаем iframe для загрузки страницы
+      const iframe = await createIframe(url, `${requestId}_${attempt}`)
+      
+      // Ожидаем загрузки iframe
+      await waitForIframeLoad(iframe)
+      
+      // Извлекаем контент
+      const content = await extractContentFromIframe(iframe, selector, requestId)
+      
+      // Успешный результат
+      const processingTime = Date.now() - startTime
+      updateStats(processingTime, true)
+      
+      sendResponse({
+        success: true,
+        content,
+        requestId,
+        timestamp: Date.now(),
+        processingTime,
+        attempt
+      })
+      
+      // Очищаем iframe
+      setTimeout(() => cleanupIframe(`${requestId}_${attempt}`), OFFSCREEN_CONFIG.CLEANUP_DELAY)
+      return
+      
+    } catch (error) {
+      lastError = error
+      console.error(`[Offscreen] Ошибка в попытке ${attempt}:`, error)
+      
+      // Очищаем iframe при ошибке
+      cleanupIframe(`${requestId}_${attempt}`)
+      
+      // Если это не последняя попытка, делаем паузу
+      if (attempt < OFFSCREEN_CONFIG.MAX_RETRY_ATTEMPTS) {
+        await delay(OFFSCREEN_CONFIG.RETRY_DELAY)
+      }
+    }
   }
+  
+  // Все попытки исчерпаны
+  const processingTime = Date.now() - startTime
+  updateStats(processingTime, false)
+  
+  console.error(`[Offscreen] Все попытки исчерпаны для ${url}`)
+  sendResponse({
+    error: lastError ? lastError.message : 'Неизвестная ошибка',
+    requestId,
+    timestamp: Date.now(),
+    processingTime,
+    totalAttempts: attempt
+  })
 }
 
 /**
@@ -442,7 +501,73 @@ setInterval(() => {
       cleanupIframe(requestId)
     }
   }
-}, 10000) // Проверяем каждые 10 секунд
+}, 15000) // Проверяем каждые 15 секунд
+
+/**
+ * Обновление статистики
+ */
+function updateStats(processingTime, success) {
+  if (success) {
+    stats.successfulRequests++
+  } else {
+    stats.failedRequests++
+  }
+  
+  // Обновляем среднее время обработки
+  const totalRequests = stats.successfulRequests + stats.failedRequests
+  if (totalRequests === 1) {
+    stats.averageProcessingTime = processingTime
+  } else {
+    // Скользящее среднее
+    stats.averageProcessingTime = Math.round(
+      (stats.averageProcessingTime * 0.8) + (processingTime * 0.2)
+    )
+  }
+}
+
+/**
+ * Функция задержки
+ */
+function delay(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+/**
+ * Обработка таймаутов
+ */
+function handleTimeout(requestId, operation) {
+  stats.timeouts++
+  console.warn(`[Offscreen] Timeout для ${operation}, requestId: ${requestId}`)
+}
+
+/**
+ * Очистка всех активных iframe (для экстренных случаев)
+ */
+function cleanupAllIframes() {
+  console.log('[Offscreen] Cleaning up all active iframes')
+  
+  for (const [requestId, iframeData] of activeIframes.entries()) {
+    try {
+      const { iframe } = iframeData
+      if (iframe.parentNode) {
+        iframe.parentNode.removeChild(iframe)
+      }
+    } catch (error) {
+      console.error('[Offscreen] Error cleaning up iframe:', error)
+    }
+  }
+  
+  activeIframes.clear()
+  console.log('[Offscreen] All iframes cleaned up')
+}
+
+// Периодическая принудительная очистка всех iframe (safety net)
+setInterval(() => {
+  if (activeIframes.size > 5) {
+    console.warn('[Offscreen] Too many active iframes, forcing cleanup')
+    cleanupAllIframes()
+  }
+}, 60000) // Каждую минуту
 
 // Лог инициализации
 console.log('[Offscreen] Offscreen document инициализирован')

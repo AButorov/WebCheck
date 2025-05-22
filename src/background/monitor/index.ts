@@ -16,6 +16,8 @@ import { CHECK_INTERVALS, NOTIFICATION_TYPES, NOTIFICATION_TIMEOUT } from '~/uti
 import { checkElement } from './element-checker'
 import { updateBadge } from './badge'
 import { ensureOffscreenDocument } from '../offscreenManager'
+import { addTaskToQueue, getQueueStats, isTaskInQueue } from '../taskQueue'
+import { initReliabilityManager, withReliability, registerActivity, getReliabilityState, performDiagnostics } from '../reliabilityManager'
 
 // Имя аларма для планирования проверок
 const CHECK_ALARM_NAME = 'web-check-monitor'
@@ -34,6 +36,9 @@ let isChecking = false
  */
 export function initMonitor() {
   console.log('[MONITOR] Initializing background monitoring system')
+  
+  // Инициализация менеджера надёжности
+  initReliabilityManager()
   
   // Настройка периодической проверки (каждую минуту)
   setupAlarm()
@@ -102,10 +107,15 @@ export async function checkDueTasksForUpdates() {
   isChecking = true
   
   try {
-    // Убеждаемся, что offscreen-документ готов к работе
+    // Регистрируем активность для менеджера надёжности
+    registerActivity()
+    
+    // Убеждаемся, что offscreen-документ готов к работе через менеджер надёжности
     try {
-      await ensureOffscreenDocument()
-      console.log('[MONITOR] Offscreen document ready for monitoring')
+      await withReliability(async () => {
+        await ensureOffscreenDocument()
+        console.log('[MONITOR] Offscreen document ready for monitoring')
+      })
     } catch (error) {
       console.warn('[MONITOR] Failed to ensure offscreen document, monitoring will use fallback:', error)
       // Продолжаем работу - element-checker имеет fallback
@@ -139,11 +149,8 @@ export async function checkDueTasksForUpdates() {
     if (tasksToCheck.length > 0) {
       console.log(`[MONITOR] Found ${tasksToCheck.length} tasks to check`)
       
-      // Добавляем все задачи в очередь
-      checkQueue = checkQueue.concat(tasksToCheck.map(task => task.id))
-      
-      // Запускаем процесс проверки
-      processCheckQueue()
+      // Используем новую систему очередей
+      await processTasksWithQueue(tasksToCheck)
     } else {
       console.log('[MONITOR] No tasks due for update')
       isChecking = false
@@ -155,130 +162,104 @@ export async function checkDueTasksForUpdates() {
 }
 
 /**
- * Обработка очереди проверок
+ * Обработка задач через систему очередей
  */
-async function processCheckQueue() {
-  // Если очередь пуста или проверка не активна, выходим
-  if (checkQueue.length === 0 || !isChecking) {
-    console.log('[MONITOR] Check queue empty or checking disabled')
-    isChecking = false
-    return
-  }
+async function processTasksWithQueue(tasks: WebCheckTask[]): Promise<void> {
+  console.log(`[MONITOR] Processing ${tasks.length} tasks through queue system`)
   
-  // Получаем задачи из хранилища
-  const tasks = await getStorageLocal('tasks', [] as WebCheckTask[])
+  const checkPromises = tasks.map(async (task) => {
+    try {
+      // Проверяем, не находится ли задача уже в очереди
+      if (isTaskInQueue(task.id)) {
+        console.log(`[MONITOR] Task ${task.id} already in queue, skipping`)
+        return
+      }
+      
+      // Добавляем задачу в очередь
+      const result = await addTaskToQueue(task, 3)
+      
+      // Обрабатываем результат
+      await handleTaskResult(task, result)
+      
+    } catch (error) {
+      console.error(`[MONITOR] Error processing task ${task.id}:`, error)
+      
+      // Обрабатываем ошибку как результат проверки
+      await handleTaskError(task, error instanceof Error ? error.message : String(error))
+    }
+  })
   
-  // Создаем массив промисов для параллельной обработки
-  const checkPromises: Promise<void>[] = []
-  
-  // Проверяем до MAX_CONCURRENT_CHECKS задач одновременно
-  while (checkQueue.length > 0 && checkPromises.length < MAX_CONCURRENT_CHECKS) {
-    const taskId = checkQueue.shift()
-    if (!taskId) continue
-    
-    const task = tasks.find(t => t.id === taskId)
-    if (!task) continue
-    
-    // Добавляем промис проверки в массив
-    checkPromises.push(checkTaskForChanges(task))
-  }
-  
-  // Ждем завершения всех проверок
+  // Ждём завершения всех задач
   await Promise.all(checkPromises)
   
-  // Если в очереди остались задачи, продолжаем обработку
-  if (checkQueue.length > 0) {
-    processCheckQueue()
-  } else {
-    console.log('[MONITOR] All tasks checked')
-    isChecking = false
-  }
+  console.log('[MONITOR] All tasks processed')
+  isChecking = false
 }
 
 /**
- * Проверка одной задачи на наличие изменений с улучшенной обработкой ошибок
+ * Обработка результата проверки задачи
  */
-async function checkTaskForChanges(task: WebCheckTask): Promise<void> {
-  console.log(`[MONITOR] Checking task: ${task.id} (${task.title})`)
+async function handleTaskResult(task: WebCheckTask, result: { html?: string; error?: string; taskId: string; timestamp: number }): Promise<void> {
+  console.log(`[MONITOR] Handling result for task: ${task.id}`)
   
-  try {
-    // Проверяем элемент с повторными попытками (3 попытки по умолчанию)
-    const result = await checkElement(task.url, task.selector, 3)
-    
-    // Флаг наличия изменений
-    let hasChanges = false
-    
-    // Всегда обновляем время последней проверки
-    const now = Date.now()
-    const updates: Partial<WebCheckTask> = {
-      lastCheckedAt: now
-    }
-    
-    // Если успешно получен HTML
-    if (result.html) {
-      // Сбрасываем счетчик ошибок, если он был
-      updates.consecutiveErrors = 0
-      
-      // Сравниваем с сохраненным HTML
-      hasChanges = result.html !== task.currentHtml
-      
-      // Если есть изменения
-      if (hasChanges) {
-        console.log(`[MONITOR] Changes detected for task: ${task.id}`)
-        updates.status = 'changed'
-        updates.currentHtml = result.html
-        updates.lastChangedAt = now
-        
-        // Показываем уведомление
-        showNotification(task, result.html)
-      } else if (task.status === 'error') {
-        // Если раньше была ошибка, а теперь нет - восстанавливаем статус
-        updates.status = 'active'
-      }
-    } else if (result.error) {
-      console.error(`[MONITOR] Error checking task ${task.id}:`, result.error)
-      
-      // Обновляем информацию об ошибке
-      updates.lastError = result.error
-      updates.lastErrorTime = now
-      
-      // Увеличиваем счетчик последовательных ошибок
-      const currentConsecutiveErrors = task.consecutiveErrors || 0
-      updates.consecutiveErrors = currentConsecutiveErrors + 1
-      
-      // Если ошибка повторяется много раз, меняем статус на "error"
-      if (updates.consecutiveErrors >= 5) {
-        updates.status = 'error'
-      }
-    }
-    
-    // Сохраняем обновления в любом случае
-    await updateTask(task.id, updates)
-    
-    // Обновляем бейдж
-    updateBadgeFromStorage()
-  } catch (error) {
-    console.error(`[MONITOR] Failed to check task ${task.id}:`, error)
-    
-    // Даже если все пошло не так, сохраняем информацию об ошибке
-    try {
-      const updates: Partial<WebCheckTask> = {
-        lastCheckedAt: Date.now(),
-        lastError: error instanceof Error ? error.message : String(error),
-        lastErrorTime: Date.now(),
-        consecutiveErrors: (task.consecutiveErrors || 0) + 1
-      }
-      
-      // Если много повторяющихся ошибок, меняем статус
-      if (updates.consecutiveErrors >= 5) {
-        updates.status = 'error'
-      }
-      
-      await updateTask(task.id, updates)
-    } catch (updateError) {
-      console.error(`[MONITOR] Failed to update task error status:`, updateError)
-    }
+  const now = Date.now()
+  const updates: Partial<WebCheckTask> = {
+    lastCheckedAt: now
   }
+  
+  if (result.html) {
+    // Успешно получен HTML
+    updates.consecutiveErrors = 0
+    
+    // Проверяем на изменения
+    const hasChanges = result.html !== task.currentHtml
+    
+    if (hasChanges) {
+      console.log(`[MONITOR] Changes detected for task: ${task.id}`)
+      updates.status = 'changed'
+      updates.currentHtml = result.html
+      updates.lastChangedAt = now
+      
+      // Показываем уведомление
+      showNotification(task, result.html)
+    } else if (task.status === 'error') {
+      // Восстанавливаем статус после исправления ошибки
+      updates.status = 'active'
+    }
+  } else {
+    // Обрабатываем как ошибку
+    await handleTaskError(task, result.error || 'Unknown error')
+    return
+  }
+  
+  // Сохраняем обновления
+  await updateTask(task.id, updates)
+  updateBadgeFromStorage()
+}
+
+/**
+ * Обработка ошибки проверки задачи
+ */
+async function handleTaskError(task: WebCheckTask, error: string): Promise<void> {
+  console.error(`[MONITOR] Handling error for task ${task.id}:`, error)
+  
+  const now = Date.now()
+  const currentConsecutiveErrors = task.consecutiveErrors || 0
+  
+  const updates: Partial<WebCheckTask> = {
+    lastCheckedAt: now,
+    lastError: error,
+    lastErrorTime: now,
+    consecutiveErrors: currentConsecutiveErrors + 1
+  }
+  
+  // Если много повторяющихся ошибок, меняем статус
+  if (updates.consecutiveErrors >= 5) {
+    updates.status = 'error'
+  }
+  
+  await updateTask(task.id, updates)
+  updateBadgeFromStorage()
 }
 
 /**
@@ -379,39 +360,134 @@ function updateBadgeFromTasks(tasks: WebCheckTask[]) {
 }
 
 /**
+ * Остановка мониторинга (для очистки ресурсов)
+ */
+export function stopMonitor(): void {
+  console.log('[MONITOR] Stopping background monitoring system')
+  
+  // Останавливаем аларм
+  browser.alarms.clear(CHECK_ALARM_NAME)
+  
+  // Очищаем флаги
+  isChecking = false
+  checkQueue = []
+  
+  console.log('[MONITOR] Background monitoring system stopped')
+}
+
+/**
+ * Получение краткой статистики производительности
+ */
+export async function getPerformanceStats(): Promise<{
+  queueLength: number
+  isProcessing: boolean
+  averageProcessingTime: number
+  successRate: number
+  recoveryCount: number
+  systemHealth: 'healthy' | 'degraded' | 'critical'
+}> {
+  const queueStats = getQueueStats()
+  const reliabilityState = getReliabilityState()
+  
+  // Вычисляем процент успешных операций
+  const totalProcessed = queueStats.stats.totalProcessed
+  const successRate = totalProcessed > 0 
+    ? Math.round((queueStats.stats.totalSuccessful / totalProcessed) * 100)
+    : 100
+  
+  // Определяем состояние системы
+  let systemHealth: 'healthy' | 'degraded' | 'critical' = 'healthy'
+  
+  if (!reliabilityState.isHealthy || reliabilityState.consecutiveErrors > 3) {
+    systemHealth = 'critical'
+  } else if (successRate < 80 || reliabilityState.consecutiveErrors > 1) {
+    systemHealth = 'degraded'
+  }
+  
+  return {
+    queueLength: queueStats.queueLength,
+    isProcessing: queueStats.isProcessing,
+    averageProcessingTime: queueStats.stats.averageProcessingTime,
+    successRate,
+    recoveryCount: reliabilityState.totalRecoveries,
+    systemHealth
+  }
+}
+
+/**
  * Тестовые функции для отладки offscreen API
  */
-export async function testOffscreenMonitoring(url: string, selector: string): Promise<void> {
+export async function testOffscreenMonitoring(url: string, selector: string): Promise<{
+  success: boolean
+  duration: number
+  contentLength?: number
+  contentPreview?: string
+  error?: string
+  queuePosition?: number
+}> {
   console.log(`[MONITOR:TEST] Testing offscreen monitoring for ${url} with selector ${selector}`)
   
   try {
-    // Убеждаемся, что offscreen-документ доступен
-    await ensureOffscreenDocument()
-    console.log('[MONITOR:TEST] Offscreen document ready')
+    // Регистрируем активность
+    registerActivity()
     
-    // Тестируем проверку элемента
+    // Создаём тестовую задачу
+    const testTask: WebCheckTask = {
+      id: `test_${Date.now()}`,
+      title: 'Test Task',
+      url,
+      selector,
+      interval: '15m',
+      status: 'active',
+      createdAt: Date.now(),
+      lastCheckedAt: 0,
+      currentHtml: ''
+    }
+    
+    // Проверяем позицию в очереди
+    const queuePosition = isTaskInQueue(testTask.id) ? getQueueStats().queueLength + 1 : 1
+    
+    // Тестируем через систему очередей
     const startTime = Date.now()
-    const result = await checkElement(url, selector, 2)
+    const result = await addTaskToQueue(testTask, 2)
     const duration = Date.now() - startTime
     
     console.log(`[MONITOR:TEST] Test completed in ${duration}ms`)
     
     if (result.html) {
       console.log(`[MONITOR:TEST] Success: Found element (${result.html.length} characters)`)
-      console.log(`[MONITOR:TEST] Content preview: ${result.html.substring(0, 200)}...`)
-    } else if (result.error) {
-      console.error(`[MONITOR:TEST] Error: ${result.error}`)
+      const preview = result.html.substring(0, 200)
+      console.log(`[MONITOR:TEST] Content preview: ${preview}...`)
+      
+      return {
+        success: true,
+        duration,
+        contentLength: result.html.length,
+        contentPreview: preview,
+        queuePosition
+      }
     } else {
-      console.warn(`[MONITOR:TEST] Unexpected result: no HTML and no error`)
+      console.error(`[MONITOR:TEST] Error: ${result.error}`)
+      return {
+        success: false,
+        duration,
+        error: result.error,
+        queuePosition
+      }
     }
     
   } catch (error) {
     console.error('[MONITOR:TEST] Test failed:', error)
+    return {
+      success: false,
+      duration: 0,
+      error: error instanceof Error ? error.message : String(error)
+    }
   }
 }
 
 /**
- * Получение статистики мониторинга
+ * Получение расширенной статистики мониторинга
  */
 export async function getMonitoringStats(): Promise<{
   tasksTotal: number
@@ -420,6 +496,9 @@ export async function getMonitoringStats(): Promise<{
   tasksWithChanges: number
   tasksWithErrors: number
   offscreenReady: boolean
+  queueStats: ReturnType<typeof getQueueStats>
+  reliabilityState: ReturnType<typeof getReliabilityState>
+  diagnostics: Awaited<ReturnType<typeof performDiagnostics>>
 }> {
   const tasks = await getStorageLocal('tasks', [] as WebCheckTask[])
   
@@ -432,12 +511,76 @@ export async function getMonitoringStats(): Promise<{
     offscreenReady = false
   }
   
+  // Получаем статистику очереди
+  const queueStats = getQueueStats()
+  
+  // Получаем состояние надёжности
+  const reliabilityState = getReliabilityState()
+  
+  // Выполняем диагностику
+  const diagnostics = await performDiagnostics()
+  
   return {
     tasksTotal: tasks.length,
     tasksActive: tasks.filter(t => t.status === 'active').length,
     tasksPaused: tasks.filter(t => t.status === 'paused').length,
     tasksWithChanges: tasks.filter(t => t.status === 'changed').length,
     tasksWithErrors: tasks.filter(t => t.status === 'error').length,
-    offscreenReady
+    offscreenReady,
+    queueStats,
+    reliabilityState,
+    diagnostics
+  }
+}
+
+/**
+ * Принудительная проверка одной задачи (для отладки)
+ */
+export async function forceCheckTask(taskId: string): Promise<{
+  success: boolean
+  result?: any
+  error?: string
+  duration: number
+}> {
+  const startTime = Date.now()
+  
+  try {
+    const tasks = await getStorageLocal('tasks', [] as WebCheckTask[])
+    const task = tasks.find(t => t.id === taskId)
+    
+    if (!task) {
+      throw new Error(`Task ${taskId} not found`)
+    }
+    
+    console.log(`[MONITOR:FORCE] Force checking task ${taskId}`)
+    
+    // Проверяем, не находится ли задача уже в очереди
+    if (isTaskInQueue(taskId)) {
+      throw new Error('Task is already in queue')
+    }
+    
+    // Добавляем в очередь с высоким приоритетом
+    const result = await addTaskToQueue(task, 1)
+    
+    // Обрабатываем результат
+    await handleTaskResult(task, result)
+    
+    const duration = Date.now() - startTime
+    
+    return {
+      success: true,
+      result,
+      duration
+    }
+    
+  } catch (error) {
+    const duration = Date.now() - startTime
+    console.error('[MONITOR:FORCE] Force check failed:', error)
+    
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      duration
+    }
   }
 }

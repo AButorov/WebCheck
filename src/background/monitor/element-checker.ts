@@ -10,6 +10,7 @@
 import browser from 'webextension-polyfill'
 import { CHECK_DELAY } from '~/utils/constants'
 import { sendMessageToOffscreen, ensureOffscreenDocument } from '../offscreenManager'
+import { withReliability, registerActivity } from '../reliabilityManager'
 import { nanoid } from '~/utils/nanoid'
 
 // Тип для результата проверки элемента
@@ -74,38 +75,46 @@ export async function checkElement(url: string, selector: string, maxRetries = C
 }
 
 /**
- * Проверка элемента через offscreen-документ
+ * Проверка элемента через offscreen-документ с менеджером надёжности
  */
 async function checkElementViaOffscreen(url: string, selector: string): Promise<CheckResult> {
   try {
-    // Убеждаемся, что offscreen-документ существует
-    await ensureOffscreenDocument()
+    // Регистрируем активность
+    registerActivity()
     
-    // Создаем уникальный ID для запроса
-    const requestId = nanoid()
+    // Используем менеджер надёжности для выполнения операции
+    const result = await withReliability(async () => {
+      // Убеждаемся, что offscreen-документ существует
+      await ensureOffscreenDocument()
+      
+      // Создаем уникальный ID для запроса
+      const requestId = nanoid()
+      
+      console.log(`[ELEMENT CHECKER] Sending request ${requestId} to offscreen for ${url}`)  
+      
+      // Отправляем сообщение в offscreen-документ
+      const response = await sendMessageToOffscreen({
+        type: 'PROCESS_URL',
+        url,
+        selector,
+        requestId
+      })
+      
+      console.log(`[ELEMENT CHECKER] Received response for request ${requestId}:`, response)
+      
+      // Проверяем ответ
+      if (response?.error) {
+        throw new Error(response.error)
+      }
+      
+      if (response?.success && response?.content) {
+        return response.content
+      }
+      
+      throw new Error('Invalid response from offscreen document')
+    }, 1) // Одна попытка восстановления
     
-    console.log(`[ELEMENT CHECKER] Sending request ${requestId} to offscreen for ${url}`)  
-    
-    // Отправляем сообщение в offscreen-документ
-    const response = await sendMessageToOffscreen({
-      type: 'PROCESS_URL',
-      url,
-      selector,
-      requestId
-    })
-    
-    console.log(`[ELEMENT CHECKER] Received response for request ${requestId}:`, response)
-    
-    // Проверяем ответ
-    if (response?.error) {
-      return { error: response.error }
-    }
-    
-    if (response?.success && response?.content) {
-      return { html: response.content }
-    }
-    
-    return { error: 'Invalid response from offscreen document' }
+    return { html: result }
     
   } catch (error) {
     console.error('[ELEMENT CHECKER] Error in checkElementViaOffscreen:', error)

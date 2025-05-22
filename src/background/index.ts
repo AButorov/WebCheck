@@ -7,7 +7,7 @@ import { MessagePayloads } from '~/types/messages'
 import './capture'
 
 // Импортируем и инициализируем систему мониторинга
-import { initMonitor, checkDueTasksForUpdates } from './monitor'
+import { initMonitor, checkDueTasksForUpdates, stopMonitor, getMonitoringStats, getPerformanceStats } from './monitor'
 
 // Импортируем менеджер offscreen-документов
 import { setupOffscreenEventHandlers, ensureOffscreenDocument } from './offscreenManager'
@@ -19,11 +19,47 @@ browser.runtime.onInstalled.addListener(({ reason }) => {
   }
 })
 
+// Обработка запросов на получение статистики мониторинга
+onMessage('get-monitoring-stats', async () => {
+  try {
+    const stats = await getMonitoringStats()
+    return { success: true, stats }
+  } catch (error) {
+    console.error('Error getting monitoring stats:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : String(error)
+    }
+  }
+})
+
+// Обработка запросов на получение статистики производительности
+onMessage('get-performance-stats', async () => {
+  try {
+    const stats = await getPerformanceStats()
+    return { success: true, stats }
+  } catch (error) {
+    console.error('Error getting performance stats:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : String(error)
+    }
+  }
+})
+
 // Инициализируем мониторинг при запуске фонового скрипта
 initMonitor()
 
 // Настраиваем обработчики событий для offscreen-документов
 setupOffscreenEventHandlers()
+
+// Обработка остановки расширения (cleanup)
+if (chrome.runtime.onSuspend) {
+  chrome.runtime.onSuspend.addListener(() => {
+    console.log('Background script suspending, cleaning up resources')
+    stopMonitor()
+  })
+}
 
 // Загружаем debug консоль в режиме разработки
 if (process.env.NODE_ENV === 'development') {
