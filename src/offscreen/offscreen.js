@@ -6,12 +6,13 @@
 
 // Константы для работы offscreen-документа
 const OFFSCREEN_CONFIG = {
-  IFRAME_LOAD_TIMEOUT: 20000, // 20 секунд на загрузку iframe
-  CONTENT_EXTRACTION_TIMEOUT: 15000, // 15 секунд на извлечение контента
+  IFRAME_LOAD_TIMEOUT: 30000, // Увеличил до 30 секунд
+  CONTENT_EXTRACTION_TIMEOUT: 25000, // Увеличил до 25 секунд
   MAX_CONCURRENT_IFRAMES: 1, // Максимальное количество одновременных iframe
   CLEANUP_DELAY: 2000, // Задержка перед удалением iframe
   MAX_RETRY_ATTEMPTS: 2, // Максимальное количество попыток повтора
-  RETRY_DELAY: 1000 // Задержка между попытками
+  RETRY_DELAY: 2000, // Увеличил задержку между попытками
+  PAGE_LOAD_DELAY: 3000 // Новый параметр: дополнительная задержка после загрузки
 }
 
 // Хранилище активных iframe
@@ -163,24 +164,31 @@ function createIframe(url, requestId) {
       return
     }
     
+    // Очистка URL от проблемных фрагментов
+    let cleanUrl = url
+    if (url.includes('#google_vignette') || url.includes('#google')) {
+      cleanUrl = url.split('#')[0]
+      console.log(`[Offscreen] Cleaned URL from ${url} to ${cleanUrl}`)
+    }
+    
     const iframe = document.createElement('iframe')
     const iframeId = `iframe_${requestId}_${++iframeCounter}`
     
     // Настройка iframe
     iframe.id = iframeId
-    iframe.src = url
+    iframe.src = cleanUrl
     iframe.style.cssText = `
       position: absolute;
       left: -9999px;
       top: -9999px;
-      width: 1px;
-      height: 1px;
+      width: 1024px;
+      height: 768px;
       border: none;
       visibility: hidden;
     `
     
     // Настройка атрибутов для безопасности
-    iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin')
+    iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms')
     
     // Добавляем в хранилище
     activeIframes.set(requestId, {
@@ -292,9 +300,14 @@ function waitForIframeLoad(iframe) {
       reject(new Error('Таймаут загрузки iframe'))
     }, OFFSCREEN_CONFIG.IFRAME_LOAD_TIMEOUT)
     
-    iframe.onload = () => {
+    iframe.onload = async () => {
       clearTimeout(timeout)
       console.log('[Offscreen] Iframe успешно загружен')
+      
+      // Дополнительная задержка для полной загрузки страницы
+      console.log(`[Offscreen] Ожидание ${OFFSCREEN_CONFIG.PAGE_LOAD_DELAY}ms для полной загрузки`)
+      await delay(OFFSCREEN_CONFIG.PAGE_LOAD_DELAY)
+      
       resolve()
     }
     

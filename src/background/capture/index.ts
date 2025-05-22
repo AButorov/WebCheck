@@ -82,8 +82,7 @@ async function handleSelectedElement(elementInfo: ElementInfo): Promise<void> {
       interval: await getDefaultInterval(),
       initialHtml: elementInfo.html || '',
       currentHtml: elementInfo.html || '',
-      thumbnailUrl: thumbnailUrl,
-      thumbnailHtml: elementInfo.thumbnailHtml, // Сохраняем HTML-версию миниатюры
+      thumbnailUrl: thumbnailUrl || '',
       lastCheckedAt: Date.now(),
       lastChangedAt: null
     };

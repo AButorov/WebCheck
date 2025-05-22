@@ -306,18 +306,29 @@ function showNotification(task: WebCheckTask, newHtml: string) {
  * Обновление задачи в хранилище
  */
 async function updateTask(taskId: string, updates: Partial<WebCheckTask>) {
-  const tasks = await getStorageLocal('tasks', [] as WebCheckTask[])
-  
-  // Находим и обновляем задачу
-  const updatedTasks = tasks.map(task => {
-    if (task.id === taskId) {
-      return { ...task, ...updates }
+  try {
+    const tasks = await getStorageLocal('tasks', [] as WebCheckTask[])
+    
+    // Проверяем, что tasks действительно массив
+    if (!Array.isArray(tasks)) {
+      console.error('[MONITOR] Tasks is not an array in updateTask:', tasks)
+      return
     }
-    return task
-  })
-  
-  // Сохраняем обновленные задачи
-  await setStorageLocal('tasks', updatedTasks)
+    
+    // Находим и обновляем задачу
+    const updatedTasks = tasks.map(task => {
+      if (task && task.id === taskId) {
+        return { ...task, ...updates }
+      }
+      return task
+    })
+    
+    // Сохраняем обновленные задачи
+    await setStorageLocal('tasks', updatedTasks)
+    console.log(`[MONITOR] Task ${taskId} updated successfully`)
+  } catch (error) {
+    console.error(`[MONITOR] Error updating task ${taskId}:`, error)
+  }
 }
 
 /**

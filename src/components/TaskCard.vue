@@ -131,15 +131,42 @@ export default defineComponent({
   props: {
     task: {
       type: Object,
-      required: true
+      required: true,
+      validator(value) {
+        // Проверяем, что task содержит обязательные поля
+        return value && 
+               typeof value.id === 'string' && 
+               typeof value.title === 'string' && 
+               typeof value.status === 'string' &&
+               typeof value.interval === 'string'
+      }
     }
   },
   
   emits: ['update:interval', 'update:status', 'view', 'remove', 'edit', 'refresh'],
   
   setup(props, { emit }) {
+    // Проверка на корректность task
+    if (!props.task || !props.task.id) {
+      console.error('[TaskCard] Invalid task prop:', props.task)
+      return {
+        interval: ref('1h'),
+        displayUrl: computed(() => ''),
+        checkboxClass: computed(() => 'text-gray-500 border-gray-500'),
+        cardClasses: computed(() => 'bg-gray-100 border-gray-300'),
+        progressClass: computed(() => 'bg-gray-500'),
+        remainingTimePercent: computed(() => 0),
+        remainingTimeText: computed(() => 'Ошибка'),
+        statusTitle: computed(() => 'Ошибка в данных задачи'),
+        onFaviconError: () => {},
+        updateInterval: () => {},
+        toggleStatus: () => {},
+        emit
+      }
+    }
+    
     // Локальный реф для интервала
-    const interval = ref(props.task.interval)
+    const interval = ref(props.task.interval || '1h')
     
     // Обработка ошибки загрузки favicon
     function onFaviconError(event) {
@@ -148,7 +175,9 @@ export default defineComponent({
     
     // Обработчик изменения интервала
     function updateInterval() {
-      emit('update:interval', props.task.id, interval.value)
+      if (props.task && props.task.id) {
+        emit('update:interval', props.task.id, interval.value)
+      }
     }
     
     // Вычисление URL для отображения
@@ -282,8 +311,10 @@ export default defineComponent({
     
     // Переключение статуса (приостановлено/активно)
     function toggleStatus() {
-      const newStatus = props.task.status === 'paused' ? 'unchanged' : 'paused'
-      emit('update:status', props.task.id, newStatus)
+      if (props.task && props.task.id && props.task.status) {
+        const newStatus = props.task.status === 'paused' ? 'unchanged' : 'paused'
+        emit('update:status', props.task.id, newStatus)
+      }
     }
     
     return {
