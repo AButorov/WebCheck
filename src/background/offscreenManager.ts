@@ -13,8 +13,8 @@ import browser from 'webextension-polyfill'
 // Конфигурация offscreen-документов
 const OFFSCREEN_CONFIG = {
   DOCUMENT_PATH: 'offscreen/offscreen.html',
-  REASON: 'USER_INPUT' as chrome.offscreen.Reason,
-  JUSTIFICATION: 'Проверка изменений на веб-страницах по настройкам пользователя'
+  REASON: 'DOM_SCRAPING' as chrome.offscreen.Reason,
+  JUSTIFICATION: 'Проверка изменений на веб-страницах путём извлечения данных из DOM'
 }
 
 // Промис для предотвращения одновременного создания документов

@@ -104,6 +104,8 @@ check_project_structure() {
     "src/offscreen/offscreen.html"
     "src/offscreen/offscreen.js"
     "src/background/offscreenManager.ts"
+    "src/background/reliabilityManager.ts"
+    "src/background/taskQueue.ts"
     "src/background/debug.ts"
   )
 
