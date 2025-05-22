@@ -131,9 +131,93 @@ function createIframe(url, requestId) {
       createdAt: Date.now()
     })
     
+    // Инжектируем скрипт для postMessage обмена (для CORS случаев)
+    const script = document.createElement('script')
+    script.textContent = `
+      (function() {
+        console.log('[WebCheck:iframe] Content extraction script loaded');
+        
+        // Обработчик postMessage
+        window.addEventListener('message', function(event) {
+          if (event.data.type === 'EXTRACT_CONTENT') {
+            console.log('[WebCheck:iframe] Extract content request received:', event.data.selector);
+            
+            try {
+              const selector = event.data.selector;
+              const requestId = event.data.requestId;
+              
+              // Поиск элемента
+              let element = document.querySelector(selector);
+              
+              // Альтернативные стратегии поиска
+              if (!element) {
+                if (selector.includes('.')) {
+                  const className = selector.split('.').pop()?.trim();
+                  if (className) {
+                    const alternatives = document.getElementsByClassName(className);
+                    if (alternatives.length > 0) {
+                      element = alternatives[0];
+                    }
+                  }
+                } else if (selector.includes('#')) {
+                  const idName = selector.split('#').pop()?.trim();
+                  if (idName) {
+                    const elements = document.querySelectorAll('[id*="' + idName + '"]');
+                    if (elements.length > 0) {
+                      element = elements[0];
+                    }
+                  }
+                }
+              }
+              
+              if (element) {
+                const content = element.outerHTML;
+                event.source.postMessage({
+                  type: 'CONTENT_EXTRACTED',
+                  requestId: requestId,
+                  content: content
+                }, '*');
+                console.log('[WebCheck:iframe] Content extracted and sent');
+              } else {
+                event.source.postMessage({
+                  type: 'CONTENT_EXTRACTED',
+                  requestId: requestId,
+                  error: 'Element not found with selector: ' + selector
+                }, '*');
+                console.warn('[WebCheck:iframe] Element not found');
+              }
+            } catch (error) {
+              event.source.postMessage({
+                type: 'CONTENT_EXTRACTED',
+                requestId: event.data.requestId,
+                error: error.message
+              }, '*');
+              console.error('[WebCheck:iframe] Error extracting content:', error);
+            }
+          }
+        });
+        
+        console.log('[WebCheck:iframe] Ready to receive extract content requests');
+      })();
+    `
+    
     // Добавляем в DOM
     const container = document.getElementById('offscreen-container')
     container.appendChild(iframe)
+    
+    // Пытаемся инжектировать скрипт после загрузки iframe
+    iframe.onload = () => {
+      try {
+        // Пробуем инжектировать скрипт напрямую
+        if (iframe.contentDocument) {
+          iframe.contentDocument.head.appendChild(script)
+          console.log(`[Offscreen] Script injected directly into iframe ${iframeId}`)
+        }
+      } catch (error) {
+        // Ошибка CORS - это нормально, postMessage будет работать в любом случае
+        console.log(`[Offscreen] Cannot inject script directly due to CORS, will use postMessage only`)
+      }
+    }
     
     console.log(`[Offscreen] Создан iframe ${iframeId} для URL: ${url}`)
     resolve(iframe)
@@ -163,7 +247,7 @@ function waitForIframeLoad(iframe) {
 }
 
 /**
- * Извлечение контента из iframe с помощью content script
+ * Извлечение контента из iframe напрямую
  */
 function extractContentFromIframe(iframe, selector, requestId) {
   return new Promise((resolve, reject) => {
@@ -171,39 +255,153 @@ function extractContentFromIframe(iframe, selector, requestId) {
       reject(new Error('Таймаут извлечения контента'))
     }, OFFSCREEN_CONFIG.CONTENT_EXTRACTION_TIMEOUT)
     
-    // Слушатель ответа от content script
-    const messageListener = (message, sender, sendResponse) => {
-      if (message.target === 'offscreen' && 
-          message.type === 'CONTENT_EXTRACTED' && 
-          message.requestId === requestId) {
+    try {
+      // Поскольку iframe загружается в offscreen-документе,
+      // мы можем получить доступ к его содержимому
+      // если iframe и offscreen-документ находятся в одном домене
+      
+      // Пробуем получить доступ к contentDocument
+      let iframeDocument
+      try {
+        iframeDocument = iframe.contentDocument || iframe.contentWindow?.document
+      } catch (error) {
+        // Если нет доступа из-за CORS, используем postMessage
+        console.warn('[Offscreen] No direct access to iframe content, using postMessage')
+        return extractContentViaPostMessage(iframe, selector, requestId, timeout, resolve, reject)
+      }
+      
+      if (!iframeDocument) {
+        reject(new Error('Не удалось получить доступ к документу iframe'))
+        return
+      }
+      
+      console.log('[Offscreen] Direct access to iframe document available')
+      
+      // Проверяем, что документ загружен
+      if (iframeDocument.readyState !== 'complete') {
+        console.log('[Offscreen] Waiting for iframe document to complete loading')
         
-        clearTimeout(timeout)
-        chrome.runtime.onMessage.removeListener(messageListener)
+        const loadListener = () => {
+          iframeDocument.removeEventListener('readystatechange', loadListener)
+          extractFromDocument(iframeDocument, selector, resolve, reject)
+        }
         
-        if (message.error) {
-          reject(new Error(message.error))
-        } else {
-          resolve(message.content)
+        iframeDocument.addEventListener('readystatechange', loadListener)
+        
+        // Дополнительная проверка через несколько секунд
+        setTimeout(() => {
+          if (iframeDocument.readyState === 'complete') {
+            iframeDocument.removeEventListener('readystatechange', loadListener)
+            extractFromDocument(iframeDocument, selector, resolve, reject)
+          }
+        }, 2000)
+      } else {
+        console.log('[Offscreen] iframe document already loaded')
+        extractFromDocument(iframeDocument, selector, resolve, reject)
+      }
+      
+      clearTimeout(timeout)
+      
+    } catch (error) {
+      clearTimeout(timeout)
+      console.error('[Offscreen] Error in extractContentFromIframe:', error)
+      reject(error)
+    }
+  })
+}
+
+/**
+ * Извлечение контента из документа
+ */
+function extractFromDocument(document, selector, resolve, reject) {
+  try {
+    console.log(`[Offscreen] Extracting content with selector: ${selector}`)
+    
+    // Пробуем найти элемент по основному селектору
+    let element = document.querySelector(selector)
+    
+    // Если не найден, пробуем альтернативные варианты
+    if (!element) {
+      console.log('[Offscreen] Primary selector failed, trying alternatives')
+      
+      if (selector.includes('.')) {
+        const className = selector.split('.').pop()?.trim()
+        if (className) {
+          const alternatives = document.getElementsByClassName(className)
+          if (alternatives.length > 0) {
+            element = alternatives[0]
+            console.log('[Offscreen] Found element by class name')
+          }
+        }
+      } else if (selector.includes('#')) {
+        const idName = selector.split('#').pop()?.trim()
+        if (idName) {
+          const elements = document.querySelectorAll(`[id*='${idName}']`)
+          if (elements.length > 0) {
+            element = elements[0]
+            console.log('[Offscreen] Found element by partial ID match')
+          }
+        }
+      }
+      
+      // Последняя попытка - по имени тега
+      if (!element && selector.match(/^[a-z]+(\.|\[)/i)) {
+        const tagName = selector.match(/^[a-z]+/i)?.[0]
+        if (tagName) {
+          const elements = document.getElementsByTagName(tagName)
+          if (elements.length > 0) {
+            element = elements[0]
+            console.log('[Offscreen] Found element by tag name')
+          }
         }
       }
     }
     
-    chrome.runtime.onMessage.addListener(messageListener)
+    if (!element) {
+      reject(new Error(`Element not found with selector: ${selector}`))
+      return
+    }
     
-    // Отправляем сообщение content script'у для извлечения контента
-    // Примечание: это будет работать через Service Worker, который перенаправит сообщение
-    chrome.runtime.sendMessage({
-      target: 'content_script',
-      type: 'EXTRACT_CONTENT',
-      selector,
-      requestId,
-      tabId: undefined // Будет определен в Service Worker
-    }).catch(error => {
+    const content = element.outerHTML
+    console.log(`[Offscreen] Successfully extracted content (${content.length} characters)`)
+    resolve(content)
+    
+  } catch (error) {
+    console.error('[Offscreen] Error extracting from document:', error)
+    reject(error)
+  }
+}
+
+/**
+ * Извлечение контента через postMessage (для CORS-ограниченных iframe)
+ */
+function extractContentViaPostMessage(iframe, selector, requestId, timeout, resolve, reject) {
+  console.log('[Offscreen] Using postMessage approach for content extraction')
+  
+  // Слушатель ответов от iframe
+  const messageListener = (event) => {
+    if (event.source === iframe.contentWindow && event.data.type === 'CONTENT_EXTRACTED' && event.data.requestId === requestId) {
       clearTimeout(timeout)
-      chrome.runtime.onMessage.removeListener(messageListener)
-      reject(new Error(`Ошибка отправки сообщения в content script: ${error.message}`))
-    })
-  })
+      window.removeEventListener('message', messageListener)
+      
+      if (event.data.error) {
+        reject(new Error(event.data.error))
+      } else {
+        resolve(event.data.content)
+      }
+    }
+  }
+  
+  window.addEventListener('message', messageListener)
+  
+  // Отправляем сообщение в iframe
+  iframe.contentWindow.postMessage({
+    type: 'EXTRACT_CONTENT',
+    selector,
+    requestId
+  }, '*')
+  
+  console.log('[Offscreen] PostMessage sent to iframe')
 }
 
 /**

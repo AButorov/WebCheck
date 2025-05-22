@@ -36,11 +36,12 @@ export default defineManifest(async (env) => ({
     service_worker: 'src/background/index.ts',
     type: 'module',
   },
-  // Используем только базовый content-script для проверки изменений
+  // Используем content-script для проверки изменений и поддержки offscreen API
   content_scripts: [
     {
       matches: ['http://*/*', 'https://*/*'],
-      js: ['src/content-script/index.ts']
+      js: ['src/content-script/index.ts'],
+      all_frames: true // Поддержка всех фреймов для offscreen API
     }
   ],
   // CSP для MV3 - максимально строгая, без unsafe-eval

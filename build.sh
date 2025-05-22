@@ -103,6 +103,8 @@ check_project_structure() {
     "src/content-script/element-selector.js"
     "src/offscreen/offscreen.html"
     "src/offscreen/offscreen.js"
+    "src/background/offscreenManager.ts"
+    "src/background/debug.ts"
   )
 
   for file in $required_files; do

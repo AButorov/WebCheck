@@ -2,14 +2,15 @@
  * Модуль для проверки элементов на веб-страницах
  * 
  * Этот модуль отвечает за:
- * 1. Открытие целевой страницы в скрытой вкладке
- * 2. Инжекцию скриптов для извлечения целевого элемента
- * 3. Получение HTML-содержимого элемента
- * 4. Обработку ошибок при проверке
+ * 1. Проверку элементов через offscreen-документы
+ * 2. Обработку ошибок при проверке
+ * 3. Обеспечение надежности с повторными попытками
  */
 
 import browser from 'webextension-polyfill'
 import { CHECK_DELAY } from '~/utils/constants'
+import { sendMessageToOffscreen, ensureOffscreenDocument } from '../offscreenManager'
+import { nanoid } from '~/utils/nanoid'
 
 // Тип для результата проверки элемента
 interface CheckResult {
@@ -17,22 +18,112 @@ interface CheckResult {
   error?: string
 }
 
+// Конфигурация для проверки элементов
+const CHECK_CONFIG = {
+  DEFAULT_TIMEOUT: 30000, // 30 секунд на одну проверку
+  RETRY_DELAY: 2000, // 2 секунды между попытками
+  DEFAULT_MAX_RETRIES: 3
+}
+
 /**
- * Проверяет состояние элемента на веб-странице с поддержкой повторных попыток
+ * Проверяет состояние элемента на веб-странице через offscreen API
  * 
  * @param url URL страницы для проверки
  * @param selector CSS селектор элемента
- * @param maxRetries Максимальное количество попыток проверки (по умолчанию 3)
+ * @param maxRetries Максимальное количество попыток проверки
  * @returns Объект с HTML содержимым или ошибкой
  */
-export async function checkElement(url: string, selector: string, maxRetries = 3): Promise<CheckResult> {
-  console.log(`[ELEMENT CHECKER] Checking element at ${url} with selector: ${selector}`)
+export async function checkElement(url: string, selector: string, maxRetries = CHECK_CONFIG.DEFAULT_MAX_RETRIES): Promise<CheckResult> {
+  console.log(`[ELEMENT CHECKER] Checking element at ${url} with selector: ${selector} (via offscreen)`)  
   
   let lastError: string | undefined
   
   // Повторяем попытки несколько раз
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    // Создаем скрытую вкладку
+    try {
+      console.log(`[ELEMENT CHECKER] Attempt ${attempt}/${maxRetries} for ${url}`)  
+      
+      // Проверяем элемент через offscreen
+      const result = await checkElementViaOffscreen(url, selector)
+      
+      // Если элемент найден успешно, возвращаем результат
+      if (result.html) {
+        console.log(`[ELEMENT CHECKER] Successfully found element on attempt ${attempt}`)  
+        return result
+      }
+      
+      // Запоминаем ошибку
+      lastError = result.error
+      console.log(`[ELEMENT CHECKER] Attempt ${attempt}/${maxRetries} failed: ${lastError}`)  
+      
+    } catch (error) {
+      console.error(`[ELEMENT CHECKER] Error in attempt ${attempt}/${maxRetries}:`, error)
+      lastError = error instanceof Error ? error.message : String(error)
+    }
+    
+    // Если это была не последняя попытка, делаем паузу
+    if (attempt < maxRetries) {
+      console.log(`[ELEMENT CHECKER] Waiting ${CHECK_CONFIG.RETRY_DELAY}ms before retry`)  
+      await delay(CHECK_CONFIG.RETRY_DELAY)
+    }
+  }
+  
+  // Все попытки исчерпаны
+  console.error(`[ELEMENT CHECKER] All ${maxRetries} attempts failed for ${url}`)  
+  return { error: lastError || 'Failed to check element after multiple attempts' }
+}
+
+/**
+ * Проверка элемента через offscreen-документ
+ */
+async function checkElementViaOffscreen(url: string, selector: string): Promise<CheckResult> {
+  try {
+    // Убеждаемся, что offscreen-документ существует
+    await ensureOffscreenDocument()
+    
+    // Создаем уникальный ID для запроса
+    const requestId = nanoid()
+    
+    console.log(`[ELEMENT CHECKER] Sending request ${requestId} to offscreen for ${url}`)  
+    
+    // Отправляем сообщение в offscreen-документ
+    const response = await sendMessageToOffscreen({
+      type: 'PROCESS_URL',
+      url,
+      selector,
+      requestId
+    })
+    
+    console.log(`[ELEMENT CHECKER] Received response for request ${requestId}:`, response)
+    
+    // Проверяем ответ
+    if (response?.error) {
+      return { error: response.error }
+    }
+    
+    if (response?.success && response?.content) {
+      return { html: response.content }
+    }
+    
+    return { error: 'Invalid response from offscreen document' }
+    
+  } catch (error) {
+    console.error('[ELEMENT CHECKER] Error in checkElementViaOffscreen:', error)
+    return { error: error instanceof Error ? error.message : String(error) }
+  }
+}
+
+/**
+ * Легаси функция: проверка элементов через создание вкладок (для совместимости)
+ * Используется как fallback, если offscreen API недоступен
+ */
+export async function checkElementViaTabs(url: string, selector: string, maxRetries = 3): Promise<CheckResult> {
+  console.log(`[ELEMENT CHECKER] Checking element at ${url} with selector: ${selector} (via tabs)`)  
+  
+  let lastError: string | undefined
+  
+  // Повторяем попытки несколько раз
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
     let tab: browser.Tabs.Tab | null = null
     
     try {
@@ -43,14 +134,14 @@ export async function checkElement(url: string, selector: string, maxRetries = 3
         pinned: false
       })
       
-      console.log(`[ELEMENT CHECKER] Created tab ${tab.id} for checking`)
+      console.log(`[ELEMENT CHECKER] Created tab ${tab.id} for checking (attempt ${attempt}/${maxRetries})`)  
       
       // Ждем загрузки страницы
       await waitForTabLoad(tab.id!)
       
       // Увеличиваем задержку с каждой попыткой
       const delayTime = 1000 * attempt
-      console.log(`[ELEMENT CHECKER] Waiting ${delayTime}ms for page to fully render (attempt ${attempt}/${maxRetries})`)
+      console.log(`[ELEMENT CHECKER] Waiting ${delayTime}ms for page to fully render`)  
       await delay(delayTime)
       
       // Извлекаем HTML содержимое элемента
@@ -63,7 +154,7 @@ export async function checkElement(url: string, selector: string, maxRetries = 3
       
       // Запоминаем ошибку для возможного возврата после всех попыток
       lastError = result.error
-      console.log(`[ELEMENT CHECKER] Attempt ${attempt}/${maxRetries} failed: ${lastError}`)
+      console.log(`[ELEMENT CHECKER] Attempt ${attempt}/${maxRetries} failed: ${lastError}`)  
       
     } catch (error) {
       console.error(`[ELEMENT CHECKER] Error in attempt ${attempt}/${maxRetries}:`, error)
@@ -73,14 +164,14 @@ export async function checkElement(url: string, selector: string, maxRetries = 3
       if (tab && tab.id) {
         try {
           await browser.tabs.remove(tab.id)
-          console.log(`[ELEMENT CHECKER] Closed tab ${tab.id}`)
+          console.log(`[ELEMENT CHECKER] Closed tab ${tab.id}`)  
         } catch (error) {
           console.error(`[ELEMENT CHECKER] Error closing tab ${tab.id}:`, error)
         }
       }
     }
     
-    // Если это была не последняя попытка, делаем паузу перед следующей
+    // Если это была не последняя попытка, делаем паузу
     if (attempt < maxRetries) {
       await delay(1000)
     }
@@ -92,19 +183,14 @@ export async function checkElement(url: string, selector: string, maxRetries = 3
 
 /**
  * Ожидание загрузки вкладки
- * 
- * @param tabId Идентификатор вкладки
- * @returns Promise, который разрешается, когда вкладка загружена
  */
 function waitForTabLoad(tabId: number): Promise<void> {
   return new Promise((resolve, reject) => {
-    // Таймаут для защиты от бесконечного ожидания
     const timeout = setTimeout(() => {
       browser.tabs.onUpdated.removeListener(onUpdated)
       reject(new Error('Timeout waiting for tab to load'))
-    }, 30000) // 30 секунд таймаут
+    }, CHECK_CONFIG.DEFAULT_TIMEOUT)
     
-    // Функция для отслеживания обновлений вкладки
     function onUpdated(changedTabId: number, changeInfo: browser.Tabs.OnUpdatedChangeInfoType) {
       if (changedTabId === tabId && changeInfo.status === 'complete') {
         clearTimeout(timeout)
@@ -113,33 +199,24 @@ function waitForTabLoad(tabId: number): Promise<void> {
       }
     }
     
-    // Подписываемся на обновления вкладки
     browser.tabs.onUpdated.addListener(onUpdated)
   })
 }
 
 /**
  * Извлечение HTML содержимого элемента с поддержкой альтернативных селекторов
- * 
- * @param tabId Идентификатор вкладки
- * @param selector CSS селектор элемента
- * @returns Объект с HTML содержимым или ошибкой
  */
 async function extractElementHtml(tabId: number, selector: string): Promise<CheckResult> {
   try {
-    // Инжектируем скрипт для извлечения HTML с поддержкой нескольких стратегий селекторов
     const results = await browser.scripting.executeScript({
       target: { tabId },
       func: (selectorArg) => {
         try {
-          // Пробуем найти элемент по основному селектору
           let element = document.querySelector(selectorArg)
           
-          // Если не найден, пробуем альтернативные варианты
           if (!element) {
-            // Попробуем найти по частичному соответствию текста/классов
+            // Пробуем альтернативные варианты...
             if (selectorArg.includes('.')) {
-              // Селектор по классу, пробуем найти элемент с этим классом
               const className = selectorArg.split('.').pop()?.trim()
               if (className) {
                 const alternatives = document.getElementsByClassName(className)
@@ -148,7 +225,6 @@ async function extractElementHtml(tabId: number, selector: string): Promise<Chec
                 }
               }
             } else if (selectorArg.includes('#')) {
-              // Селектор по id, пробуем найти элементы с похожим id
               const idName = selectorArg.split('#').pop()?.trim()
               if (idName) {
                 const elements = document.querySelectorAll(`[id*='${idName}']`)
@@ -158,11 +234,9 @@ async function extractElementHtml(tabId: number, selector: string): Promise<Chec
               }
             }
             
-            // Если все еще не нашли и селектор выглядит как имя тега с классом или атрибутом
             if (!element && selectorArg.match(/^[a-z]+(\.|\[)/i)) {
               const tagName = selectorArg.match(/^[a-z]+/i)?.[0]
               if (tagName) {
-                // Найти все элементы с этим тегом и посмотреть, есть ли похожие
                 const elements = document.getElementsByTagName(tagName)
                 if (elements.length > 0) {
                   element = elements[0]
@@ -183,7 +257,6 @@ async function extractElementHtml(tabId: number, selector: string): Promise<Chec
       args: [selector]
     })
     
-    // Проверяем результат
     if (!results || results.length === 0) {
       return { error: 'No result from script execution' }
     }
@@ -207,9 +280,6 @@ async function extractElementHtml(tabId: number, selector: string): Promise<Chec
 
 /**
  * Вспомогательная функция для задержки
- * 
- * @param ms Время задержки в миллисекундах
- * @returns Promise, который разрешается через указанное время
  */
 function delay(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms))

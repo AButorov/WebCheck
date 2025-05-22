@@ -16,51 +16,45 @@
 
 ## 2. Управление жизненным циклом offscreen-документа
 
-- [ ] **Реализовать менеджер offscreen-документов в Service Worker** (например, в новом файле `src/background/offscreenManager.js` или интегрировать в существующую логику):
-  - [ ] Реализовать функцию `hasOffscreenDocument(path)` для проверки существования документа (используя `chrome.runtime.getContexts()`).
-  - [ ] Реализовать функцию `ensureOffscreenDocument(path)`:
-    - [ ] Проверяет наличие документа с помощью `hasOffscreenDocument`.
-    - [ ] Если документа нет, создает его с помощью `chrome.offscreen.createDocument()`.
-    - [ ] Использовать подходящую `reason` из `chrome.offscreen.Reason` (например, `USER_INPUT`, так как работа инициируется настройками пользователя, или другая, не накладывающая строгих временных ограничений).
-    - [ ] Предусмотреть параметр `justification` для `createDocument`.
-    - [ ] Реализовать механизм для предотвращения одновременного создания нескольких документов (например, с использованием промиса `creatingPromise`).
+- [x] **Реализовать менеджер offscreen-документов в Service Worker** (в новом файле `src/background/offscreenManager.js` или интегрировать в существующую логику):
+  - [x] Реализовать функцию `hasOffscreenDocument(path)` для проверки существования документа (используя `chrome.runtime.getContexts()`).
+  - [x] Реализовать функцию `ensureOffscreenDocument(path)`:
+    - [x] Проверяет наличие документа с помощью `hasOffscreenDocument`.
+    - [x] Если документа нет, создает его с помощью `chrome.offscreen.createDocument()`.
+    - [x] Использовать подходящую `reason` из `chrome.offscreen.Reason` (например, `USER_INPUT`, так как работа инициируется настройками пользователя, или другая, не накладывающая строгих временных ограничений).
+    - [x] Предусмотреть параметр `justification` для `createDocument`.
+    - [x] Реализовать механизм для предотвращения одновременного создания нескольких документов (например, с использованием промиса `creatingPromise`).
 
 ## 3. Модификация логики фонового мониторинга (`src/background/monitor/`)
 
-- [ ] **Интегрировать `ensureOffscreenDocument` в основной модуль мониторинга**:
-  - [ ] Вызывать `ensureOffscreenDocument()` перед каждой попыткой проверки URL, требующей DOM-доступа.
-- [ ] **Реализовать обмен сообщениями между Service Worker и `offscreen.js`**:
-  - [ ] **Service Worker (логика мониторинга)**:
-    - [ ] Создать функцию (например, `getContentViaOffscreen(url, selector)`) которая:
-      - [ ] Отправляет сообщение в `offscreen.js` с `url` и `selector` (используя `chrome.runtime.sendMessage`). Сообщение должно содержать уникальный идентификатор `target: 'offscreen'` и `type` (например, `PROCESS_URL`).
-      - [ ] Ожидает ответ от `offscreen.js` (возвращает Promise).
-      - [ ] Внедрить таймаут для ожидания ответа.
-      - [ ] Обработать `chrome.runtime.lastError` и ошибки, возвращенные из `offscreen.js`.
-  - [ ] **`src/offscreen/offscreen.js`**:
-    - [ ] Установить слушатель `chrome.runtime.onMessage.addListener` для приема сообщений от Service Worker.
-    - [ ] Проверять `message.target === 'offscreen'` и `message.type`.
-- [ ] **Реализовать извлечение контента страницы в `offscreen.js`**:
-  - [ ] **Создание и управление `<iframe>`**:
-    - [ ] При получении сообщения, динамически создать `<iframe>`.
-    - [ ] Установить `src` для `<iframe>` на полученный `url`.
-    - [ ] Сделать iframe невидимым (например, `iframe.style.display = 'none'`).
-    - [ ] Добавить `<iframe>` в DOM `offscreen.html` (`document.body.appendChild(iframe)`).
-    - [ ] Настроить обработчики `iframe.onload` и `iframe.onerror`.
-    - [ ] Обязательно удалять `<iframe>` из DOM после завершения работы или при ошибке (`document.body.removeChild(iframe)`).
-  - [ ] **Получение контента из `<iframe>` (ключевой этап)**:
-    - **Важно**: Прямой доступ к `iframe.contentDocument` из `offscreen.js` будет ограничен для кросс-доменных URL. Необходимо использовать content scripts, которые будут внедряться в этот iframe.
-    * [ ] **Настроить Content Script**:
-      - [ ] В `manifest.json` объявить content script, который будет внедряться во все фреймы (`"all_frames": true`) и иметь доступ к необходимым URL (`"matches": ["<all_urls>"]` или более специфично).
-      - [ ] Этот content script должен уметь:
-        - [ ] Получать селектор (например, через сообщение от `offscreen.js` или service worker, если напрямую в offscreen нет `chrome.scripting`).
-        - [ ] Извлекать `innerHTML` или другие данные указанного элемента.
-        - [ ] Отправлять результат обратно (`chrome.runtime.sendMessage`) в `offscreen.js` или напрямую в service worker.
-    * [ ] **Взаимодействие `offscreen.js` с Content Script в `<iframe>`**:
-      - [ ] После загрузки `<iframe>` (`iframe.onload`), `offscreen.js` должен инициировать работу content script (например, отправив ему сообщение, если content script его слушает) или просто ожидать сообщение от content script с результатом.
-      * _Альтернатива для `offscreen.js`_: если content script настроен на автоматическую работу и отправку сообщения при загрузке в фрейме, `offscreen.js` просто ожидает это сообщение.
-  - [ ] **Отправка результата из `offscreen.js` обратно в Service Worker**:
-    - [ ] Использовать функцию `sendResponse()` из слушателя `onMessage` для отправки полученных данных (или сообщения об ошибке) обратно в Service Worker.
-    - [ ] Не забыть вернуть `true` из слушателя `onMessage` для поддержки асинхронного `sendResponse`.
+- [x] **Интегрировать `ensureOffscreenDocument` в основной модуль мониторинга**:
+  - [x] Вызывать `ensureOffscreenDocument()` перед каждой попыткой проверки URL, требующей DOM-доступа.
+- [x] **Реализовать обмен сообщениями между Service Worker и `offscreen.js`**:
+  - [x] **Service Worker (логика мониторинга)**:
+    - [x] Создать функцию (например, `getContentViaOffscreen(url, selector)`) которая:
+      - [x] Отправляет сообщение в `offscreen.js` с `url` и `selector` (используя `chrome.runtime.sendMessage`). Сообщение должно содержать уникальный идентификатор `target: 'offscreen'` и `type` (например, `PROCESS_URL`).
+      - [x] Ожидает ответ от `offscreen.js` (возвращает Promise).
+      - [x] Внедрить таймаут для ожидания ответа.
+      - [x] Обработать `chrome.runtime.lastError` и ошибки, возвращенные из `offscreen.js`.
+  - [x] **`src/offscreen/offscreen.js`**:
+    - [x] Установить слушатель `chrome.runtime.onMessage.addListener` для приема сообщений от Service Worker.
+    - [x] Проверять `message.target === 'offscreen'` и `message.type`.
+- [x] **Реализовать извлечение контента страницы в `offscreen.js`**:
+  - [x] **Создание и управление `<iframe>`**:
+    - [x] При получении сообщения, динамически создать `<iframe>`.
+    - [x] Установить `src` для `<iframe>` на полученный `url`.
+    - [x] Сделать iframe невидимым.
+    - [x] Добавить `<iframe>` в DOM `offscreen.html`.
+    - [x] Настроить обработчики `iframe.onload` и `iframe.onerror`.
+    - [x] Обязательно удалять `<iframe>` из DOM после завершения работы или при ошибке.
+  - [x] **Получение контента из `<iframe>`**:
+    - [x] Реализовано прямое извлечение контента через `iframe.contentDocument`
+    - [x] Добавлено резервное решение через postMessage для CORS-ограниченных страниц
+    - [x] Автоматическая инжекция скрипта в iframe для обработки postMessage
+    - [x] Обновлен `manifest.json` для поддержки `"all_frames": true`
+  - [x] **Отправка результата из `offscreen.js` обратно в Service Worker**:
+    - [x] Использовать функцию `sendResponse()` из слушателя `onMessage` для отправки полученных данных (или сообщения об ошибке) обратно в Service Worker.
+    - [x] Не забыть вернуть `true` из слушателя `onMessage` для поддержки асинхронного `sendResponse`.
 
 ## 4. Обработка ограничений и повышение надёжности
 

@@ -237,12 +237,58 @@ onMessage('check-element', async (message) => {
 
 // Обработчик сообщений от background script и popup
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  console.log('[WebCheck:ContentScript] Received message:', message.action);
+  console.log('[WebCheck:ContentScript] Received message:', message.action || message.type);
   
   // Обработка ping-сообщения для проверки доступности content script
   if (message.action === 'ping') {
     console.log('[WebCheck:ContentScript] Ping received, sending pong');
     sendResponse({ status: 'pong' });
+    return true;
+  }
+  
+  // Обработка запроса на извлечение контента от offscreen-документа
+  if (message.target === 'content_script' && message.type === 'EXTRACT_CONTENT') {
+    console.log('[WebCheck:ContentScript] Extract content request received:', message);
+    
+    try {
+      const element = findElementBySelectorAdvanced(message.selector);
+      
+      if (element) {
+        const content = element.outerHTML;
+        
+        // Отправляем результат обратно в offscreen
+        chrome.runtime.sendMessage({
+          target: 'offscreen',
+          type: 'CONTENT_EXTRACTED',
+          requestId: message.requestId,
+          content: content
+        });
+        
+        console.log('[WebCheck:ContentScript] Content extracted and sent to offscreen');
+      } else {
+        // Отправляем ошибку
+        chrome.runtime.sendMessage({
+          target: 'offscreen',
+          type: 'CONTENT_EXTRACTED',
+          requestId: message.requestId,
+          error: `Element not found with selector: ${message.selector}`
+        });
+        
+        console.warn('[WebCheck:ContentScript] Element not found:', message.selector);
+      }
+      
+    } catch (error) {
+      console.error('[WebCheck:ContentScript] Error extracting content:', error);
+      
+      // Отправляем ошибку
+      chrome.runtime.sendMessage({
+        target: 'offscreen',
+        type: 'CONTENT_EXTRACTED',
+        requestId: message.requestId,
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+    
     return true;
   }
   
@@ -265,5 +311,47 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   
   return false; // Не обрабатываем другие сообщения
 });
+
+// Функция для поиска элемента по селектору с альтернативными стратегиями
+function findElementBySelectorAdvanced(selector: string): Element | null {
+  // Пробуем найти элемент по основному селектору
+  let element = document.querySelector(selector);
+  
+  // Если не найден, пробуем альтернативные варианты
+  if (!element) {
+    // Попробуем найти по частичному соответствию классов
+    if (selector.includes('.')) {
+      const className = selector.split('.').pop()?.trim();
+      if (className) {
+        const alternatives = document.getElementsByClassName(className);
+        if (alternatives.length > 0) {
+          element = alternatives[0];
+        }
+      }
+    } else if (selector.includes('#')) {
+      // Попробуем найти элементы с похожим id
+      const idName = selector.split('#').pop()?.trim();
+      if (idName) {
+        const elements = document.querySelectorAll(`[id*='${idName}']`);
+        if (elements.length > 0) {
+          element = elements[0];
+        }
+      }
+    }
+    
+    // Если все еще не нашли и селектор выглядит как имя тега
+    if (!element && selector.match(/^[a-z]+(\.|\[)/i)) {
+      const tagName = selector.match(/^[a-z]+/i)?.[0];
+      if (tagName) {
+        const elements = document.getElementsByTagName(tagName);
+        if (elements.length > 0) {
+          element = elements[0];
+        }
+      }
+    }
+  }
+  
+  return element;
+}
 
 console.log('[WebCheck:ContentScript] Core content script initialized');

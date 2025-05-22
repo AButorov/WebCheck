@@ -15,6 +15,7 @@ import { getStorageLocal, setStorageLocal } from '~/utils/browser-storage'
 import { CHECK_INTERVALS, NOTIFICATION_TYPES, NOTIFICATION_TIMEOUT } from '~/utils/constants'
 import { checkElement } from './element-checker'
 import { updateBadge } from './badge'
+import { ensureOffscreenDocument } from '../offscreenManager'
 
 // Имя аларма для планирования проверок
 const CHECK_ALARM_NAME = 'web-check-monitor'
@@ -101,6 +102,15 @@ export async function checkDueTasksForUpdates() {
   isChecking = true
   
   try {
+    // Убеждаемся, что offscreen-документ готов к работе
+    try {
+      await ensureOffscreenDocument()
+      console.log('[MONITOR] Offscreen document ready for monitoring')
+    } catch (error) {
+      console.warn('[MONITOR] Failed to ensure offscreen document, monitoring will use fallback:', error)
+      // Продолжаем работу - element-checker имеет fallback
+    }
+    
     // Получаем задачи из хранилища
     const tasks = await getStorageLocal('tasks', [] as WebCheckTask[])
     
@@ -366,4 +376,68 @@ function updateBadgeFromTasks(tasks: WebCheckTask[]) {
   
   // Обновляем бейдж
   updateBadge(changedTasksCount)
+}
+
+/**
+ * Тестовые функции для отладки offscreen API
+ */
+export async function testOffscreenMonitoring(url: string, selector: string): Promise<void> {
+  console.log(`[MONITOR:TEST] Testing offscreen monitoring for ${url} with selector ${selector}`)
+  
+  try {
+    // Убеждаемся, что offscreen-документ доступен
+    await ensureOffscreenDocument()
+    console.log('[MONITOR:TEST] Offscreen document ready')
+    
+    // Тестируем проверку элемента
+    const startTime = Date.now()
+    const result = await checkElement(url, selector, 2)
+    const duration = Date.now() - startTime
+    
+    console.log(`[MONITOR:TEST] Test completed in ${duration}ms`)
+    
+    if (result.html) {
+      console.log(`[MONITOR:TEST] Success: Found element (${result.html.length} characters)`)
+      console.log(`[MONITOR:TEST] Content preview: ${result.html.substring(0, 200)}...`)
+    } else if (result.error) {
+      console.error(`[MONITOR:TEST] Error: ${result.error}`)
+    } else {
+      console.warn(`[MONITOR:TEST] Unexpected result: no HTML and no error`)
+    }
+    
+  } catch (error) {
+    console.error('[MONITOR:TEST] Test failed:', error)
+  }
+}
+
+/**
+ * Получение статистики мониторинга
+ */
+export async function getMonitoringStats(): Promise<{
+  tasksTotal: number
+  tasksActive: number
+  tasksPaused: number
+  tasksWithChanges: number
+  tasksWithErrors: number
+  offscreenReady: boolean
+}> {
+  const tasks = await getStorageLocal('tasks', [] as WebCheckTask[])
+  
+  // Проверяем состояние offscreen-документа
+  let offscreenReady = false
+  try {
+    await ensureOffscreenDocument()
+    offscreenReady = true
+  } catch {
+    offscreenReady = false
+  }
+  
+  return {
+    tasksTotal: tasks.length,
+    tasksActive: tasks.filter(t => t.status === 'active').length,
+    tasksPaused: tasks.filter(t => t.status === 'paused').length,
+    tasksWithChanges: tasks.filter(t => t.status === 'changed').length,
+    tasksWithErrors: tasks.filter(t => t.status === 'error').length,
+    offscreenReady
+  }
 }

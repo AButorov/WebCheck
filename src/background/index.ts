@@ -9,6 +9,9 @@ import './capture'
 // Импортируем и инициализируем систему мониторинга
 import { initMonitor, checkDueTasksForUpdates } from './monitor'
 
+// Импортируем менеджер offscreen-документов
+import { setupOffscreenEventHandlers, ensureOffscreenDocument } from './offscreenManager'
+
 // Обработка установки расширения
 browser.runtime.onInstalled.addListener(({ reason }) => {
   if (reason === 'install') {
@@ -18,6 +21,16 @@ browser.runtime.onInstalled.addListener(({ reason }) => {
 
 // Инициализируем мониторинг при запуске фонового скрипта
 initMonitor()
+
+// Настраиваем обработчики событий для offscreen-документов
+setupOffscreenEventHandlers()
+
+// Загружаем debug консоль в режиме разработки
+if (process.env.NODE_ENV === 'development') {
+  import('./debug')
+    .then(() => console.log('Debug console loaded'))
+    .catch(error => console.warn('Failed to load debug console:', error))
+}
 
 // Обработка сообщений для ручной проверки изменений
 onMessage('check-for-changes', async (message) => {
