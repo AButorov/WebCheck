@@ -6,13 +6,13 @@
 
 // Константы для работы offscreen-документа
 const OFFSCREEN_CONFIG = {
-  IFRAME_LOAD_TIMEOUT: 30000, // Увеличил до 30 секунд
-  CONTENT_EXTRACTION_TIMEOUT: 25000, // Увеличил до 25 секунд
+  IFRAME_LOAD_TIMEOUT: 60000, // Увеличил до 30 секунд
+  CONTENT_EXTRACTION_TIMEOUT: 45000, // Увеличил до 25 секунд
   MAX_CONCURRENT_IFRAMES: 1, // Максимальное количество одновременных iframe
   CLEANUP_DELAY: 2000, // Задержка перед удалением iframe
-  MAX_RETRY_ATTEMPTS: 2, // Максимальное количество попыток повтора
+  MAX_RETRY_ATTEMPTS: 3, // Максимальное количество попыток повтора
   RETRY_DELAY: 2000, // Увеличил задержку между попытками
-  PAGE_LOAD_DELAY: 3000 // Новый параметр: дополнительная задержка после загрузки
+  PAGE_LOAD_DELAY: 5000 // Новый параметр: дополнительная задержка после загрузки
 }
 
 // Хранилище активных iframe

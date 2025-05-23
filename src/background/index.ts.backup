@@ -1,19 +1,17 @@
+import { initMessageHandler } from './messageHandler'
 import browser from 'webextension-polyfill'
 import { onMessage } from 'webext-bridge/background'
 import { WebCheckTask } from '~/types/task'
 import { MessagePayloads } from '~/types/messages'
 
-// Импортируем универсальный обработчик сообщений
-import { setupUniversalMessageHandler } from './universalMessageHandler'
-
 // Импортируем модуль захвата элементов
 import './capture'
 
 // Импортируем и инициализируем систему мониторинга
-import { initMonitor, checkDueTasksForUpdates, stopMonitor } from './monitor'
+import { initMonitor, checkDueTasksForUpdates, stopMonitor, getMonitoringStats, getPerformanceStats } from './monitor'
 
 // Импортируем менеджер offscreen-документов
-import { setupOffscreenEventHandlers } from './offscreenManager'
+import { setupOffscreenEventHandlers, ensureOffscreenDocument } from './offscreenManager'
 
 // Обработка установки расширения
 browser.runtime.onInstalled.addListener(({ reason }) => {
@@ -22,12 +20,39 @@ browser.runtime.onInstalled.addListener(({ reason }) => {
   }
 })
 
-// ВАЖНО: Инициализируем универсальный обработчик ДО других инициализаций
-setupUniversalMessageHandler()
+// Обработка запросов на получение статистики мониторинга
+onMessage('get-monitoring-stats', async () => {
+  try {
+    const stats = await getMonitoringStats()
+    return { success: true, stats }
+  } catch (error) {
+    console.error('Error getting monitoring stats:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : String(error)
+    }
+  }
+})
+
+// Обработка запросов на получение статистики производительности
+onMessage('get-performance-stats', async () => {
+  try {
+    const stats = await getPerformanceStats()
+    return { success: true, stats }
+  } catch (error) {
+    console.error('Error getting performance stats:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : String(error)
+    }
+  }
+})
 
 // Инициализируем мониторинг при запуске фонового скрипта
 initMonitor()
 
+// Инициализируем централизованный обработчик сообщений
+initMessageHandler()
 // Настраиваем обработчики событий для offscreen-документов
 setupOffscreenEventHandlers()
 
@@ -46,7 +71,7 @@ if (process.env.NODE_ENV === 'development') {
     .catch(error => console.warn('Failed to load debug console:', error))
 }
 
-// Обработка сообщений для ручной проверки изменений (webext-bridge)
+// Обработка сообщений для ручной проверки изменений
 onMessage('check-for-changes', async (message) => {
   const { data } = message;
   const { taskId, tabId } = data as MessagePayloads['check-for-changes'];
@@ -56,7 +81,7 @@ onMessage('check-for-changes', async (message) => {
   await checkDueTasksForUpdates()
 })
 
-// Обработка уведомлений (webext-bridge)
+// Обработка уведомлений
 onMessage('show-notification', async (message) => {
   const { data } = message;
   const { title, message: notificationMessage, taskId } = data as MessagePayloads['show-notification'];
@@ -64,13 +89,13 @@ onMessage('show-notification', async (message) => {
   // Создаем уведомление
   browser.notifications.create({
     type: 'basic',
-    iconUrl: browser.runtime.getURL('icons/icon-128.png'),
+    iconUrl: browser.runtime.getURL('assets/icons/icon-128.png'),
     title,
     message: notificationMessage,
   })
 })
 
-// Обработка запросов на проверку элемента (webext-bridge)
+// Обработка запросов на проверку элемента
 onMessage('check-element', async (message) => {
   const { data, sender } = message;
   const { taskId, selector } = data as MessagePayloads['check-element'];
@@ -87,10 +112,13 @@ onMessage('check-element', async (message) => {
       return { taskId, error: 'Task not found' }
     }
     
-    // В реальной реализации здесь будет использоваться функция checkElement
+    // Проверяем элемент с использованием модуля element-checker
+    // (на этом этапе просто возвращаем заглушку)
+    // В реальной реализации будет использоваться функция checkElement из ./monitor/element-checker
+    
     return {
       taskId,
-      html: task.currentHtml || '',
+      html: task.currentHtml, // В реальной реализации здесь будет результат проверки
     }
   } catch (error) {
     console.error('Error checking element:', error)

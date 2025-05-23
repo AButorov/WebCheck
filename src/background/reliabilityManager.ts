@@ -9,7 +9,7 @@
  */
 
 import browser from 'webextension-polyfill'
-import { ensureOffscreenDocument, hasOffscreenDocument, closeOffscreenDocument, pingOffscreenDocument } from './offscreenManager'
+import { ensureOffscreenDocument, hasOffscreenDocument, closeOffscreenDocument, pingOffscreenDocument, invalidateCache } from './offscreenManager'
 
 // Конфигурация менеджера надёжности
 const RELIABILITY_CONFIG = {
@@ -106,6 +106,9 @@ async function performHealthCheck(): Promise<boolean> {
   console.log('[RELIABILITY] Performing health check')
   
   try {
+    // Сбрасываем кэш для точной проверки
+    invalidateCache()
+    
     // Проверяем существование документа
     const documentExists = await hasOffscreenDocument()
     
@@ -249,6 +252,14 @@ async function triggerRecovery(): Promise<void> {
  */
 async function forceCloseDocument(): Promise<void> {
   try {
+    // Сначала проверяем, существует ли документ
+    const exists = await hasOffscreenDocument()
+    
+    if (!exists) {
+      console.log('[RELIABILITY] Document does not exist, skipping close')
+      return
+    }
+    
     console.log('[RELIABILITY] Force closing offscreen document')
     await closeOffscreenDocument()
   } catch (error) {
