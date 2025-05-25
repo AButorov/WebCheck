@@ -100,3 +100,22 @@ onMessage('check-element', async (message) => {
     }
   }
 })
+
+// ВРЕМЕННЫЙ ОБРАБОТЧИК ДЛЯ ТЕСТИРОВАНИЯ
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.type === 'get-monitoring-stats') {
+    getMonitoringStats()
+      .then(stats => sendResponse({ success: true, stats }))
+      .catch(error => sendResponse({ success: false, error: error.message }));
+    return true; // КРИТИЧНО для асинхронного ответа
+  }
+  
+  if (request.type === 'get-performance-stats') {
+    getPerformanceStats()
+      .then(stats => sendResponse({ success: true, stats }))
+      .catch(error => sendResponse({ success: false, error: error.message }));
+    return true; // КРИТИЧНО для асинхронного ответа
+  }
+  
+  return false;
+});
