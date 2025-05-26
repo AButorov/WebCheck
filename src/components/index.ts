@@ -1,10 +1,11 @@
 // Этот файл экспортирует все общие компоненты для автоимпорта
-import TaskCard from './TaskCard.vue'
+// Компоненты автоматически доступны через unplugin-vue-components
 
-// Экспортируем компоненты
-export {
-  TaskCard
-}
+// TaskCard и TaskEditor уже зарегистрированы в components.d.ts
+// Нет необходимости в ручном импорте
 
 // Добавляем логирование для отладки
-console.log('[COMPONENTS] Components loaded:', { TaskCard })
+console.log('[COMPONENTS] Component auto-imports configured via unplugin-vue-components')
+
+// Экспортируем пустой объект для совместимости
+export {}

@@ -5,132 +5,132 @@
 
 class OffscreenProcessor {
   constructor() {
-    this.currentIframe = null;
-    this.processing = false;
-    this.setupMessageHandler();
+    this.currentIframe = null
+    this.processing = false
+    this.setupMessageHandler()
   }
 
   setupMessageHandler() {
     chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       if (request.target !== 'offscreen') {
-        return false;
+        return false
       }
 
-      console.log('[OFFSCREEN] Received message:', request.type);
+      console.log('[OFFSCREEN] Received message:', request.type)
 
       switch (request.type) {
         case 'PING':
-          sendResponse({ status: 'alive' });
-          return false;
+          sendResponse({ status: 'alive' })
+          return false
 
         case 'PROCESS_URL':
-          this.handleProcessUrl(request, sendResponse);
-          return true; // Асинхронный ответ
+          this.handleProcessUrl(request, sendResponse)
+          return true // Асинхронный ответ
 
         default:
-          sendResponse({ error: 'Unknown message type' });
-          return false;
+          sendResponse({ error: 'Unknown message type' })
+          return false
       }
-    });
+    })
   }
 
   async handleProcessUrl(request, sendResponse) {
-    const { url, selector, requestId } = request;
+    const { url, selector, requestId } = request
 
     if (this.processing) {
-      sendResponse({ 
-        success: false, 
-        error: 'Another task is being processed' 
-      });
-      return;
+      sendResponse({
+        success: false,
+        error: 'Another task is being processed',
+      })
+      return
     }
 
-    this.processing = true;
+    this.processing = true
     try {
-      const content = await this.processElement(url, selector);
-      sendResponse({ 
-        success: true, 
+      const content = await this.processElement(url, selector)
+      sendResponse({
+        success: true,
         content,
         requestId,
-        timestamp: Date.now()
-      });
+        timestamp: Date.now(),
+      })
     } catch (error) {
-      console.error('[OFFSCREEN] Processing error:', error);
-      sendResponse({ 
-        success: false, 
+      console.error('[OFFSCREEN] Processing error:', error)
+      sendResponse({
+        success: false,
         error: error.message,
-        requestId
-      });
+        requestId,
+      })
     } finally {
-      this.processing = false;
-      this.cleanup();
+      this.processing = false
+      this.cleanup()
     }
   }
 
   async processElement(url, selector) {
-    console.log(`[OFFSCREEN] Processing ${url} with selector ${selector}`);
-    
+    console.log(`[OFFSCREEN] Processing ${url} with selector ${selector}`)
+
     return new Promise((resolve, reject) => {
-      const iframe = document.createElement('iframe');
-      iframe.style.display = 'none';
-      iframe.sandbox = 'allow-scripts allow-same-origin';
-      
-      this.currentIframe = iframe;
-      
+      const iframe = document.createElement('iframe')
+      iframe.style.display = 'none'
+      iframe.sandbox = 'allow-scripts allow-same-origin'
+
+      this.currentIframe = iframe
+
       const timeout = setTimeout(() => {
-        reject(new Error('Iframe load timeout'));
-      }, 20000);
+        reject(new Error('Iframe load timeout'))
+      }, 20000)
 
       iframe.onload = () => {
-        clearTimeout(timeout);
-        
+        clearTimeout(timeout)
+
         // Даём странице время на загрузку динамического контента
         setTimeout(() => {
           try {
-            const doc = iframe.contentDocument;
+            const doc = iframe.contentDocument
             if (!doc) {
-              throw new Error('Cannot access iframe document');
+              throw new Error('Cannot access iframe document')
             }
 
-            const element = doc.querySelector(selector);
+            const element = doc.querySelector(selector)
             if (!element) {
-              throw new Error(`Element not found: ${selector}`);
+              throw new Error(`Element not found: ${selector}`)
             }
 
-            resolve(element.textContent || element.innerHTML);
+            resolve(element.textContent || element.innerHTML)
           } catch (error) {
             // CORS ограничение - используем postMessage
-            this.handleCrossOrigin(iframe, selector, resolve, reject);
+            this.handleCrossOrigin(iframe, selector, resolve, reject)
           }
-        }, 2000); // 2 секунды на загрузку динамического контента
-      };
+        }, 2000) // 2 секунды на загрузку динамического контента
+      }
 
       iframe.onerror = () => {
-        clearTimeout(timeout);
-        reject(new Error('Failed to load page'));
-      };
+        clearTimeout(timeout)
+        reject(new Error('Failed to load page'))
+      }
 
       // Очищаем URL от проблемных фрагментов
-      const cleanUrl = url.split('#')[0];
-      iframe.src = cleanUrl;
-      
-      document.body.appendChild(iframe);
-    });
+      const cleanUrl = url.split('#')[0]
+      iframe.src = cleanUrl
+
+      document.body.appendChild(iframe)
+    })
   }
 
   handleCrossOrigin(iframe, selector, resolve, reject) {
-    console.log('[OFFSCREEN] Using postMessage for cross-origin');
-    
-    const messageHandler = (event) => {
-      if (event.source !== iframe.contentWindow) return;
-      
-      if (event.data.type === 'ELEMENT_CONTENT') {
-        window.removeEventListener('message', messageHandler);
-        resolve(event.data.content);
-      }
-    };
+    console.log('[OFFSCREEN] Using postMessage for cross-origin')
 
-    window.addEventListener('message', messageHandler);
+    const messageHandler = (event) => {
+      if (event.source !== iframe.contentWindow) return
+
+      if (event.data.type === 'ELEMENT_CONTENT') {
+        window.removeEventListener('message', messageHandler)
+        resolve(event.data.content)
+      }
+    }
+
+    window.addEventListener('message', messageHandler)
 
     // Инжектируем скрипт через URL
     const script = `
@@ -141,26 +141,26 @@ class OffscreenProcessor {
           content: element.textContent || element.innerHTML
         }, '*');
       }
-    `;
+    `
 
-    iframe.src = `javascript:${encodeURIComponent(script)}`;
-    
+    iframe.src = `javascript:${encodeURIComponent(script)}`
+
     // Таймаут для cross-origin
     setTimeout(() => {
-      window.removeEventListener('message', messageHandler);
-      reject(new Error('Cross-origin timeout'));
-    }, 5000);
+      window.removeEventListener('message', messageHandler)
+      reject(new Error('Cross-origin timeout'))
+    }, 5000)
   }
 
   cleanup() {
     if (this.currentIframe) {
-      this.currentIframe.remove();
-      this.currentIframe = null;
+      this.currentIframe.remove()
+      this.currentIframe = null
     }
   }
 }
 
 // Создаём единственный экземпляр процессора
-const processor = new OffscreenProcessor();
+new OffscreenProcessor()
 
-console.log('[OFFSCREEN] Processor initialized');
+console.log('[OFFSCREEN] Processor initialized')

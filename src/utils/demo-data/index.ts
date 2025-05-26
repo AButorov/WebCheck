@@ -1,6 +1,5 @@
 import { WebCheckTask } from '~/types/task'
 import { nanoid } from '~/utils/nanoid'
-import { JsonValue } from '~/utils/browser-storage'
 
 // Типы для функций хранилища
 type GetStorageLocalFunction = <T>(key: string, defaultValue: T) => Promise<T>
@@ -11,7 +10,7 @@ export function generateDemoTasks(): WebCheckTask[] {
   const now = Date.now()
   const hourAgo = now - 60 * 60 * 1000
   const dayAgo = now - 24 * 60 * 60 * 1000
-  
+
   return [
     {
       id: nanoid(),
@@ -54,17 +53,17 @@ export function generateDemoTasks(): WebCheckTask[] {
       currentHtml: '<div class="availability-text">Нет в наличии</div>',
       lastCheckedAt: dayAgo,
       lastChangedAt: null,
-    }
+    },
   ]
 }
 
 // Функция для очистки демо-режима
 export async function clearDemoMode(
-  getStorageLocal: GetStorageLocalFunction, 
+  getStorageLocal: GetStorageLocalFunction,
   setStorageLocal: SetStorageLocalFunction
 ): Promise<void> {
   const isDemoMode = await getStorageLocal('demoMode', false)
-  
+
   if (isDemoMode) {
     await setStorageLocal('demoMode', false)
     await setStorageLocal('tasks', [])
@@ -73,12 +72,12 @@ export async function clearDemoMode(
 
 // Функция для инициализации демо-режима
 export async function initDemoMode(
-  getStorageLocal: GetStorageLocalFunction, 
+  getStorageLocal: GetStorageLocalFunction,
   setStorageLocal: SetStorageLocalFunction
 ): Promise<void> {
   const isDemoMode = await getStorageLocal('demoMode', false)
   const tasks = await getStorageLocal('tasks', [] as WebCheckTask[])
-  
+
   // Если еще нет задач и не включен демо-режим
   if (tasks.length === 0 && !isDemoMode) {
     await setStorageLocal('demoMode', true)

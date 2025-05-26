@@ -1,6 +1,8 @@
 // CSP-совместимый модуль выбора элементов на странице
 // Без использования сторонних библиотек и eval()
 
+import browser from 'webextension-polyfill'
+
 interface ElementInfo {
   selector: string;
   rect: DOMRect;
@@ -8,6 +10,12 @@ interface ElementInfo {
   pageTitle: string;
   pageUrl: string;
   faviconUrl: string;
+}
+
+// Типизация для сообщений
+interface PickerMessage {
+  action: string;
+  elementInfo?: ElementInfo;
 }
 
 export function initElementPicker() {
@@ -253,7 +261,7 @@ export function initElementPicker() {
     };
     
     // Отправляем данные в background script
-    chrome.runtime.sendMessage({
+    browser.runtime.sendMessage({
       action: 'captureElement',
       elementInfo
     });
@@ -263,7 +271,7 @@ export function initElementPicker() {
   
   function cancelSelection() {
     deactivatePicker();
-    chrome.runtime.sendMessage({ action: 'cancelElementSelection' });
+    browser.runtime.sendMessage({ action: 'cancelElementSelection' });
   }
   
   // Получение URL фавиконки
@@ -415,7 +423,7 @@ export function initElementPicker() {
   }
   
   // Обработчик сообщений от background script
-  chrome.runtime.onMessage.addListener((message) => {
+  browser.runtime.onMessage.addListener((message: PickerMessage) => {
     if (message.action === 'activateElementPicker') {
       activatePicker();
       return true;

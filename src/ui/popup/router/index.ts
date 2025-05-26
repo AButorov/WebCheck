@@ -1,6 +1,9 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
+// @ts-expect-error - Vue компоненты
 import Index from '~/ui/popup/pages/Index.vue'
+// @ts-expect-error - Vue компоненты
 import ViewChanges from '~/ui/popup/pages/ViewChanges.vue'
+// @ts-expect-error - Vue компоненты
 import NewTask from '~/ui/popup/pages/NewTask.vue'
 
 console.log('[ROUTER] Initializing router...')
@@ -23,7 +26,7 @@ const routes = [
     path: '/new-task',
     name: 'NewTask',
     component: NewTask,
-  }
+  },
 ]
 
 console.log('[ROUTER] Routes defined:', routes)

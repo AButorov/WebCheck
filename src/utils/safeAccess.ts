@@ -1,23 +1,23 @@
 /**
  * Безопасный доступ к вложенным свойствам объекта
  */
-export function safeGet<T = any>(
-  obj: any,
-  path: string,
-  defaultValue?: T
-): T | undefined {
+export function safeGet<T = unknown>(obj: unknown, path: string, defaultValue?: T): T | undefined {
   try {
     const keys = path.split('.')
-    let result = obj
-    
+    let result: unknown = obj
+
     for (const key of keys) {
       if (result == null) {
         return defaultValue
       }
-      result = result[key]
+      if (typeof result === 'object' && result !== null && key in result) {
+        result = (result as Record<string, unknown>)[key]
+      } else {
+        return defaultValue
+      }
     }
-    
-    return result ?? defaultValue
+
+    return (result as T) ?? defaultValue
   } catch {
     return defaultValue
   }
@@ -26,15 +26,12 @@ export function safeGet<T = any>(
 /**
  * Проверка наличия всех обязательных свойств
  */
-export function hasRequiredProps<T extends object>(
-  obj: any,
-  props: (keyof T)[]
-): obj is T {
+export function hasRequiredProps<T extends object>(obj: unknown, props: (keyof T)[]): obj is T {
   if (!obj || typeof obj !== 'object') {
     return false
   }
-  
-  return props.every(prop => prop in obj && obj[prop] != null)
+
+  return props.every((prop) => prop in obj && (obj as Record<keyof T, unknown>)[prop] != null)
 }
 
 /**

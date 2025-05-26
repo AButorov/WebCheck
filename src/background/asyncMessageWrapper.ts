@@ -1,11 +1,26 @@
+import browser from 'webextension-polyfill'
+
 /**
  * Обёртка для безопасной обработки асинхронных сообщений
  */
 
-type AsyncMessageHandler = (
-  request: any,
-  sender: chrome.runtime.MessageSender
-) => Promise<any>;
+// Типы для обработчиков сообщений
+export interface AsyncMessageRequest {
+  type?: string
+  action?: string
+  [key: string]: unknown
+}
+
+interface AsyncMessageResponse<T = unknown> {
+  success: boolean
+  result?: T
+  error?: string
+}
+
+type AsyncMessageHandler<T = unknown> = (
+  request: AsyncMessageRequest,
+  sender: browser.Runtime.MessageSender
+) => Promise<T>
 
 /**
  * Создаёт обработчик сообщений с правильной обработкой асинхронных ответов
@@ -13,56 +28,55 @@ type AsyncMessageHandler = (
 export function createAsyncMessageHandler(
   handlers: Record<string, AsyncMessageHandler>
 ): (
-  request: any,
-  sender: chrome.runtime.MessageSender,
-  sendResponse: (response?: any) => void
+  request: AsyncMessageRequest,
+  sender: browser.Runtime.MessageSender,
+  sendResponse: (response?: AsyncMessageResponse) => void
 ) => boolean | undefined {
-  
   return (request, sender, sendResponse) => {
     // Определяем тип сообщения
-    const messageType = request?.type || request?.action;
-    
+    const messageType = request?.type || request?.action
+
     if (!messageType || !(messageType in handlers)) {
       // Не наш обработчик, пропускаем
-      return false;
+      return false
     }
 
     // Логируем входящее сообщение
-    console.log(`[ASYNC HANDLER] Processing ${messageType}`, request);
+    console.log(`[ASYNC HANDLER] Processing ${messageType}`, request)
 
     // Обрабатываем асинхронно
     Promise.resolve()
       .then(() => handlers[messageType](request, sender))
-      .then(result => {
-        console.log(`[ASYNC HANDLER] Success for ${messageType}`, result);
-        sendResponse({ success: true, result });
+      .then((result) => {
+        console.log(`[ASYNC HANDLER] Success for ${messageType}`, result)
+        sendResponse({ success: true, result })
       })
-      .catch(error => {
-        console.error(`[ASYNC HANDLER] Error for ${messageType}:`, error);
-        sendResponse({ 
-          success: false, 
-          error: error.message || String(error) 
-        });
-      });
+      .catch((error) => {
+        console.error(`[ASYNC HANDLER] Error for ${messageType}:`, error)
+        sendResponse({
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+        })
+      })
 
     // КРИТИЧНО: Возвращаем true для асинхронного ответа
-    return true;
-  };
+    return true
+  }
 }
 
 /**
  * Хелпер для отправки сообщений с ожиданием ответа
  */
-export async function sendMessageAsync<T = any>(message: any): Promise<T> {
-  const response = await chrome.runtime.sendMessage(message);
-  
+export async function sendMessageAsync<T = unknown>(message: AsyncMessageRequest): Promise<T> {
+  const response = (await browser.runtime.sendMessage(message)) as AsyncMessageResponse<T>
+
   if (!response) {
-    throw new Error('No response received');
+    throw new Error('No response received')
   }
-  
+
   if (!response.success) {
-    throw new Error(response.error || 'Unknown error');
+    throw new Error(response.error || 'Unknown error')
   }
-  
-  return response.result;
+
+  return response.result as T
 }

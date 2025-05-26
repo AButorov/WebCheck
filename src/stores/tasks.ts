@@ -2,7 +2,6 @@ import { defineStore } from 'pinia'
 import { WebCheckTask, TaskInterval, TaskStatus } from '~/types/task'
 import { nanoid } from '~/utils/nanoid'
 import { getStorageLocal, setStorageLocal } from '~/utils/browser-storage'
-import { ref } from 'vue'
 
 console.log('[TASKS STORE] Initializing tasks store...')
 
@@ -13,26 +12,26 @@ export const useTasksStore = defineStore('tasks', {
     loading: false,
     error: null as string | null,
   }),
-  
+
   getters: {
-    activeTasks: (state) => state.tasks.filter(task => task.status !== 'paused'),
+    activeTasks: (state) => state.tasks.filter((task) => task.status !== 'paused'),
     taskCount: (state) => state.tasks.length,
-    activeTaskCount: (state) => state.tasks.filter(task => task.status !== 'paused').length,
+    activeTaskCount: (state) => state.tasks.filter((task) => task.status !== 'paused').length,
   },
-  
+
   actions: {
     async loadTasks() {
       console.log('[TASKS STORE] Loading tasks...')
       this.loading = true
       this.error = null
-      
+
       try {
         // Загрузка задач из хранилища
         const result = await getStorageLocal('tasks', [] as WebCheckTask[])
         console.log('[TASKS STORE] Tasks loaded from storage:', result)
-        
+
         let tasks: WebCheckTask[] = []
-        
+
         // Проверяем, является ли result массивом
         if (Array.isArray(result)) {
           tasks = [...result]
@@ -46,29 +45,32 @@ export const useTasksStore = defineStore('tasks', {
             tasks = []
           }
         }
-        
+
         // Проверяем целостность задач
-        const validTasks = tasks.filter(task => {
+        const validTasks = tasks.filter((task) => {
           return task && typeof task === 'object' && task.id && task.url && task.selector
         })
-        
+
         if (validTasks.length !== tasks.length) {
-          console.warn('[TASKS STORE] Some tasks are invalid, filtered out:', tasks.length - validTasks.length)
+          console.warn(
+            '[TASKS STORE] Some tasks are invalid, filtered out:',
+            tasks.length - validTasks.length
+          )
         }
-        
+
         // Если задач нет или они недействительны, используем демо-данные
         if (validTasks.length === 0) {
           console.log('[TASKS STORE] No valid tasks found, generating demo data...')
-          
+
           // Генерируем демо-задачи
           this.tasks = generateDemoTasks()
-          
+
           // Сохраняем демо-данные в хранилище
           await setStorageLocal('tasks', this.tasks)
           console.log('[TASKS STORE] Demo tasks saved to storage:', this.tasks)
         } else {
           this.tasks = validTasks
-          
+
           // Если были недействительные задачи, сохраняем только действительные
           if (validTasks.length !== tasks.length) {
             await setStorageLocal('tasks', validTasks)
@@ -78,7 +80,7 @@ export const useTasksStore = defineStore('tasks', {
       } catch (error) {
         console.error('[TASKS STORE] Error loading tasks:', error)
         this.error = 'Не удалось загрузить задачи'
-        
+
         // В случае ошибки все равно попробуем сгенерировать демо-данные
         try {
           console.log('[TASKS STORE] Fallback: Generating demo data...')
@@ -95,7 +97,7 @@ export const useTasksStore = defineStore('tasks', {
         console.log('[TASKS STORE] Tasks loading complete. Tasks count:', this.tasks.length)
       }
     },
-    
+
     async saveTasks() {
       console.log('[TASKS STORE] Saving tasks...')
       try {
@@ -104,19 +106,24 @@ export const useTasksStore = defineStore('tasks', {
           console.error('[TASKS STORE] this.tasks is not an array:', this.tasks)
           return
         }
-        
+
         // Создаем копию массива для сохранения
         const tasksCopy = [...this.tasks]
-        console.log('[TASKS STORE] Saving tasks array (length=' + tasksCopy.length + '):', tasksCopy)
-        
+        console.log(
+          '[TASKS STORE] Saving tasks array (length=' + tasksCopy.length + '):',
+          tasksCopy
+        )
+
         await setStorageLocal('tasks', tasksCopy)
         console.log('[TASKS STORE] Tasks saved successfully')
       } catch (error) {
         console.error('[TASKS STORE] Error saving tasks:', error)
       }
     },
-    
-    async addTask(task: Omit<WebCheckTask, 'id' | 'createdAt' | 'lastCheckedAt' | 'lastChangedAt'>) {
+
+    async addTask(
+      task: Omit<WebCheckTask, 'id' | 'createdAt' | 'lastCheckedAt' | 'lastChangedAt'>
+    ) {
       console.log('[TASKS STORE] Adding new task:', task)
       const newTask: WebCheckTask = {
         ...task,
@@ -125,15 +132,15 @@ export const useTasksStore = defineStore('tasks', {
         lastCheckedAt: Date.now(),
         lastChangedAt: null,
       }
-      
+
       this.tasks.push(newTask)
       await this.saveTasks()
       return newTask
     },
-    
+
     async updateTask(id: string, updates: Partial<WebCheckTask>) {
       console.log('[TASKS STORE] Updating task:', id, updates)
-      const taskIndex = this.tasks.findIndex(task => task.id === id)
+      const taskIndex = this.tasks.findIndex((task) => task.id === id)
       if (taskIndex !== -1) {
         this.tasks[taskIndex] = { ...this.tasks[taskIndex], ...updates }
         await this.saveTasks()
@@ -142,30 +149,30 @@ export const useTasksStore = defineStore('tasks', {
         console.warn('[TASKS STORE] Task not found for update:', id)
       }
     },
-    
+
     async removeTask(id: string) {
       console.log('[TASKS STORE] Removing task:', id)
-      this.tasks = this.tasks.filter(task => task.id !== id)
+      this.tasks = this.tasks.filter((task) => task.id !== id)
       await this.saveTasks()
       console.log('[TASKS STORE] Task removed successfully')
     },
-    
+
     async updateTaskStatus(id: string, status: TaskStatus) {
       console.log('[TASKS STORE] Updating task status:', id, status)
       await this.updateTask(id, { status })
     },
-    
+
     async updateTaskInterval(id: string, interval: TaskInterval) {
       console.log('[TASKS STORE] Updating task interval:', id, interval)
       await this.updateTask(id, { interval })
     },
-    
+
     async markTaskAsChecked(id: string, hasChanges: boolean, newHtml?: string) {
       console.log('[TASKS STORE] Marking task as checked:', id, 'hasChanges:', hasChanges)
       const updates: Partial<WebCheckTask> = {
         lastCheckedAt: Date.now(),
       }
-      
+
       if (hasChanges) {
         updates.status = 'changed'
         updates.lastChangedAt = Date.now()
@@ -173,13 +180,13 @@ export const useTasksStore = defineStore('tasks', {
           updates.currentHtml = newHtml
         }
       }
-      
+
       await this.updateTask(id, updates)
     },
-    
+
     async resetTaskChanges(id: string) {
       console.log('[TASKS STORE] Resetting task changes:', id)
-      const task = this.tasks.find(t => t.id === id)
+      const task = this.tasks.find((t) => t.id === id)
       if (task && task.status === 'changed') {
         await this.updateTask(id, {
           status: 'unchanged',
@@ -199,7 +206,7 @@ function generateDemoTasks(): WebCheckTask[] {
   const now = Date.now()
   const hourAgo = now - 60 * 60 * 1000
   const dayAgo = now - 24 * 60 * 60 * 1000
-  
+
   return [
     {
       id: nanoid(),
@@ -242,6 +249,6 @@ function generateDemoTasks(): WebCheckTask[] {
       currentHtml: '<div class="availability-text">Нет в наличии</div>',
       lastCheckedAt: dayAgo,
       lastChangedAt: null,
-    }
+    },
   ]
 }

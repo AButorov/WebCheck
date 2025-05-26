@@ -1,7 +1,12 @@
 <template>
   <div class="task-editor p-4 bg-white rounded-lg shadow">
     <!-- Убираем заголовок для избежания дублирования -->
-    <h2 v-if="isEdit" class="text-xl font-bold mb-4">Редактирование задачи</h2>
+    <h2 
+      v-if="isEdit" 
+      class="text-xl font-bold mb-4"
+    >
+      Редактирование задачи
+    </h2>
     
     <!-- Форма редактирования -->
     <form @submit.prevent="saveTask">
@@ -9,25 +14,30 @@
       <div class="mb-3">
         <label class="block text-sm font-medium text-gray-700 mb-1">Название задачи</label>
         <input 
+          ref="titleInput"
           v-model="editedTask.title" 
           type="text" 
           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-[#3e66fb] focus:border-[#3e66fb]"
           required
-          ref="titleInput"
-        />
+        >
       </div>
       
       <!-- Миниатюра элемента (перемещена ниже) -->
       <div class="mb-3">
-        <p class="text-sm text-gray-600 mb-1">Выбранный элемент:</p>
+        <p class="text-sm text-gray-600 mb-1">
+          Выбранный элемент:
+        </p>
         <div class="thumbnail-container border rounded-lg overflow-hidden bg-gray-50">
           <iframe 
             v-if="task.thumbnailUrl" 
             :src="task.thumbnailUrl" 
             frameborder="0" 
             class="w-full h-24 object-contain"
-          ></iframe>
-          <div v-else class="bg-gray-100 w-full h-24 flex items-center justify-center text-gray-400">
+          />
+          <div 
+            v-else 
+            class="bg-gray-100 w-full h-24 flex items-center justify-center text-gray-400"
+          >
             Изображение недоступно
           </div>
         </div>
@@ -42,7 +52,7 @@
             alt="Site icon" 
             class="w-5 h-5 mr-2"
             @error="onFaviconError"
-          />
+          >
           <span class="text-gray-800 truncate">{{ displayUrl }}</span>
         </div>
       </div>
@@ -54,17 +64,32 @@
           v-model="editedTask.interval" 
           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-[#3e66fb] focus:border-[#3e66fb]"
         >
-          <option value="10s">Каждые 10 секунд (отладка)</option>
-          <option value="15m">Каждые 15 минут</option>
-          <option value="1h">Каждый час</option>
-          <option value="3h">Каждые 3 часа</option>
-          <option value="1d">Раз в день</option>
+          <option value="10s">
+            Каждые 10 секунд (отладка)
+          </option>
+          <option value="15m">
+            Каждые 15 минут
+          </option>
+          <option value="1h">
+            Каждый час
+          </option>
+          <option value="3h">
+            Каждые 3 часа
+          </option>
+          <option value="1d">
+            Раз в день
+          </option>
         </select>
       </div>
       
       <!-- Информация о селекторе (скрытая, для отладки) -->
-      <div v-if="debug" class="mb-3 p-3 bg-gray-100 rounded text-sm">
-        <p class="font-medium">Селектор для отслеживания:</p>
+      <div 
+        v-if="debug" 
+        class="mb-3 p-3 bg-gray-100 rounded text-sm"
+      >
+        <p class="font-medium">
+          Селектор для отслеживания:
+        </p>
         <code class="block mt-1 text-xs bg-gray-200 p-2 rounded">{{ task.selector }}</code>
       </div>
       

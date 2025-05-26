@@ -1,35 +1,55 @@
-// Самодостаточный content-script для выбора элементов на странице
-// Все необходимые функции включены в этот файл для динамической инъекции
+/**
+ * Самодостаточный content-script для выбора элементов на странице
+ * Все необходимые функции включены в этот файл для динамической инъекции
+ */
 
-// Определяем типы данных для TypeScript
+import browser from 'webextension-polyfill'
+
+// Типизация для информации об элементе
 interface ElementInfo {
-  selector: string;
-  rect: DOMRect;
-  html: string;
-  pageTitle: string;
-  pageUrl: string;
-  faviconUrl: string;
+  selector: string
+  rect: {
+    top: number
+    left: number
+    width: number
+    height: number
+    x: number
+    y: number
+    bottom: number
+    right: number
+    toJSON?: () => DOMRect
+  }
+  html: string
+  pageTitle: string
+  pageUrl: string
+  faviconUrl: string
+}
+
+// Типизация для сообщений
+interface PickerMessage {
+  action: string
+  elementInfo?: ElementInfo
 }
 
 // Глобальные переменные для предотвращения множественной инициализации
-let isPickerInitialized = false;
-let targetElement = null;
-let overlay = null;
-let isPickerActive = false;
+let isPickerInitialized = false
+let targetElement: HTMLElement | null = null
+let overlay: HTMLElement | null = null
+let isPickerActive = false
 
 // Главная функция для инициализации выбора элементов
-function initElementPicker() {
+function initElementPicker(): void {
   // Предотвращаем повторную инициализацию
   if (isPickerInitialized) {
-    console.log('[WebCheck] Element picker already initialized, skipping initialization');
-    return;
+    console.log('[WebCheck] Element picker already initialized, skipping initialization')
+    return
   }
-  
-  isPickerInitialized = true;
-  console.log('[WebCheck] Element capture module initialized');
-  
+
+  isPickerInitialized = true
+  console.log('[WebCheck] Element capture module initialized')
+
   // Создаем стили для выделения элементов
-  const style = document.createElement('style');
+  const style = document.createElement('style')
   style.textContent = `
     .webcheck-highlight {
       outline: 2px solid #4285f4 !important;
@@ -114,142 +134,148 @@ function initElementPicker() {
       color: #444;
       max-width: 400px;
     }
-  `;
-  
-  document.head.appendChild(style);
-  
+  `
+
+  document.head.appendChild(style)
+
   // Функция для создания интерфейса управления
-  function createOverlay() {
+  function createOverlay(): void {
     // Если оверлей уже существует, не создаем новый
     if (document.querySelector('.webcheck-overlay')) {
-      return;
+      return
     }
-    
-    overlay = document.createElement('div');
-    overlay.className = 'webcheck-overlay';
-    
-    const title = document.createElement('div');
-    title.className = 'webcheck-title';
-    title.textContent = 'Web Check - Выбор элемента';
-    
-    const instructions = document.createElement('div');
-    instructions.className = 'webcheck-instructions';
-    instructions.textContent = 'Наведите курсор на элемент, который хотите отслеживать, и кликните по нему. Или используйте кнопки ниже.';
-    
-    const controls = document.createElement('div');
-    controls.className = 'webcheck-controls';
-    
-    const confirmButton = document.createElement('button');
-    confirmButton.className = 'webcheck-btn webcheck-btn-confirm';
-    confirmButton.textContent = 'Выбрать элемент';
-    confirmButton.addEventListener('click', () => confirmSelection());
-    
-    const cancelButton = document.createElement('button');
-    cancelButton.className = 'webcheck-btn webcheck-btn-cancel';
-    cancelButton.textContent = 'Отменить';
-    cancelButton.addEventListener('click', () => cancelSelection());
-    
-    overlay.appendChild(title);
-    overlay.appendChild(instructions);
-    controls.appendChild(confirmButton);
-    controls.appendChild(cancelButton);
-    overlay.appendChild(controls);
-    
-    document.body.appendChild(overlay);
+
+    overlay = document.createElement('div')
+    overlay.className = 'webcheck-overlay'
+
+    const title = document.createElement('div')
+    title.className = 'webcheck-title'
+    title.textContent = 'Web Check - Выбор элемента'
+
+    const instructions = document.createElement('div')
+    instructions.className = 'webcheck-instructions'
+    instructions.textContent =
+      'Наведите курсор на элемент, который хотите отслеживать, и кликните по нему. Или используйте кнопки ниже.'
+
+    const controls = document.createElement('div')
+    controls.className = 'webcheck-controls'
+
+    const confirmButton = document.createElement('button')
+    confirmButton.className = 'webcheck-btn webcheck-btn-confirm'
+    confirmButton.textContent = 'Выбрать элемент'
+    confirmButton.addEventListener('click', () => confirmSelection())
+
+    const cancelButton = document.createElement('button')
+    cancelButton.className = 'webcheck-btn webcheck-btn-cancel'
+    cancelButton.textContent = 'Отменить'
+    cancelButton.addEventListener('click', () => cancelSelection())
+
+    overlay.appendChild(title)
+    overlay.appendChild(instructions)
+    controls.appendChild(confirmButton)
+    controls.appendChild(cancelButton)
+    overlay.appendChild(controls)
+
+    document.body.appendChild(overlay)
   }
-  
+
   // Обработчики событий
-  function handleMouseOver(e) {
-    e.stopPropagation();
-    
+  function handleMouseOver(e: Event): void {
+    e.stopPropagation()
+
     if (targetElement) {
-      targetElement.classList.remove('webcheck-highlight');
+      targetElement.classList.remove('webcheck-highlight')
     }
-    
-    targetElement = e.target;
-    
-    if (targetElement && targetElement !== document.body && 
-        !targetElement.classList.contains('webcheck-overlay') && 
-        !targetElement.closest('.webcheck-overlay')) {
-      targetElement.classList.add('webcheck-highlight');
-      
+
+    const target = e.target as HTMLElement
+    targetElement = target
+
+    if (
+      targetElement &&
+      targetElement !== document.body &&
+      !targetElement.classList.contains('webcheck-overlay') &&
+      !targetElement.closest('.webcheck-overlay')
+    ) {
+      targetElement.classList.add('webcheck-highlight')
+
       // Показываем информацию о текущем элементе
-      updateElementInfo(targetElement);
+      updateElementInfo(targetElement)
     } else {
-      targetElement = null;
+      targetElement = null
     }
   }
-  
+
   // Обновляем информацию о выбранном элементе
-  function updateElementInfo(element) {
-    if (!overlay) return;
-    
+  function updateElementInfo(element: HTMLElement): void {
+    if (!overlay) return
+
     // Удаляем старую информацию
-    const oldInfo = overlay.querySelector('.webcheck-element-info');
+    const oldInfo = overlay.querySelector('.webcheck-element-info')
     if (oldInfo) {
-      oldInfo.remove();
+      oldInfo.remove()
     }
-    
+
     // Создаем новую информацию
-    const info = document.createElement('div');
-    info.className = 'webcheck-element-info';
-    
+    const info = document.createElement('div')
+    info.className = 'webcheck-element-info'
+
     // Получаем тег и классы для отображения
-    const tagName = element.tagName.toLowerCase();
-    const classes = element.className && typeof element.className === 'string' 
-      ? element.className.split(' ').filter(c => c && !c.includes('webcheck-'))
-      : [];
-    const classStr = classes.length > 0 ? `.${classes.join('.')}` : '';
-    
+    const tagName = element.tagName.toLowerCase()
+    const classes =
+      element.className && typeof element.className === 'string'
+        ? element.className.split(' ').filter((c: string) => c && !c.includes('webcheck-'))
+        : []
+    const classStr = classes.length > 0 ? `.${classes.join('.')}` : ''
+
     // Определяем тип элемента (заголовок, текст, изображение и т.д.)
-    let elementType = 'Элемент';
+    let elementType = 'Элемент'
     if (tagName === 'h1' || tagName === 'h2' || tagName === 'h3') {
-      elementType = 'Заголовок';
+      elementType = 'Заголовок'
     } else if (tagName === 'p') {
-      elementType = 'Параграф';
+      elementType = 'Параграф'
     } else if (tagName === 'img') {
-      elementType = 'Изображение';
+      elementType = 'Изображение'
     } else if (tagName === 'div' || tagName === 'section') {
-      elementType = 'Блок';
+      elementType = 'Блок'
     } else if (tagName === 'span' || tagName === 'a') {
-      elementType = 'Текст';
+      elementType = 'Текст'
     } else if (tagName === 'table') {
-      elementType = 'Таблица';
+      elementType = 'Таблица'
     } else if (tagName === 'ul' || tagName === 'ol') {
-      elementType = 'Список';
+      elementType = 'Список'
     }
-    
+
     // Текст элемента (обрезаем, если слишком длинный)
-    const text = element.textContent?.trim() || '';
-    const shortText = text.length > 100 ? text.substring(0, 100) + '...' : text;
-    
+    const text = element.textContent?.trim() || ''
+    const shortText = text.length > 100 ? text.substring(0, 100) + '...' : text
+
     info.innerHTML = `
       <strong>Тип:</strong> ${elementType}<br>
       <strong>Элемент:</strong> ${tagName}${classStr}<br>
       <strong>Текст:</strong> ${shortText || '<нет текста>'}
-    `;
-    
-    overlay.appendChild(info);
+    `
+
+    overlay.appendChild(info)
   }
-  
-  function handleClick(e) {
+
+  function handleClick(e: Event): void {
     if (isPickerActive && targetElement) {
-      e.preventDefault();
-      e.stopPropagation();
-      confirmSelection();
+      e.preventDefault()
+      e.stopPropagation()
+      confirmSelection()
     }
   }
-  
+
   // Подтверждение выбора элемента
-  function confirmSelection() {
-    if (!targetElement) return;
-    
-    const selector = generateSelector(targetElement);
-    const rect = targetElement.getBoundingClientRect();
-    const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
-    const scrollLeft = window.pageXOffset || document.documentElement.scrollLeft;
-    
-    const elementInfo = {
+  function confirmSelection(): void {
+    if (!targetElement) return
+
+    const selector = generateSelector(targetElement)
+    const rect = targetElement.getBoundingClientRect()
+    const scrollTop = window.pageYOffset || document.documentElement.scrollTop
+    const scrollLeft = window.pageXOffset || document.documentElement.scrollLeft
+
+    const elementInfo: ElementInfo = {
       selector,
       rect: {
         top: rect.top + scrollTop,
@@ -260,207 +286,205 @@ function initElementPicker() {
         y: rect.y,
         bottom: rect.bottom,
         right: rect.right,
-        toJSON: rect.toJSON
+        toJSON: rect.toJSON?.bind(rect),
       },
       html: targetElement.outerHTML,
       pageTitle: document.title,
       pageUrl: window.location.href,
-      faviconUrl: getFaviconUrl()
-    };
-    
+      faviconUrl: getFaviconUrl(),
+    }
+
     // Отправляем данные в background script
-    chrome.runtime.sendMessage({
+    browser.runtime.sendMessage({
       action: 'captureElement',
-      elementInfo
-    });
-    
-    deactivatePicker();
+      elementInfo,
+    })
+
+    deactivatePicker()
   }
-  
-  function cancelSelection() {
-    deactivatePicker();
-    chrome.runtime.sendMessage({ action: 'cancelElementSelection' });
+
+  function cancelSelection(): void {
+    deactivatePicker()
+    browser.runtime.sendMessage({ action: 'cancelElementSelection' })
   }
-  
+
   // Получение URL фавиконки
-  function getFaviconUrl() {
+  function getFaviconUrl(): string {
     // Пытаемся найти все иконки
-    const icons = Array.from(document.querySelectorAll('link[rel*="icon"]'));
-    
+    const icons = Array.from(document.querySelectorAll('link[rel*="icon"]')) as HTMLLinkElement[]
+
     // Если есть несколько иконок, сортируем по размеру (предпочитаем большие)
     if (icons.length > 0) {
       // Ищем иконку с атрибутом sizes, предпочитая большие размеры
-      const iconWithSize = icons.find(icon => 
-        icon.getAttribute('sizes') && icon.getAttribute('sizes').includes('32')
-      ) || icons.find(icon => 
-        icon.getAttribute('sizes') && icon.getAttribute('sizes').includes('48')
-      ) || icons.find(icon => 
-        icon.getAttribute('sizes') && icon.getAttribute('sizes').includes('64')
-      );
-      
-      if (iconWithSize && iconWithSize.getAttribute('href')) {
-        return new URL(iconWithSize.getAttribute('href'), window.location.origin).href;
+      const iconWithSize =
+        icons.find((icon) => icon.getAttribute('sizes')?.includes('32')) ||
+        icons.find((icon) => icon.getAttribute('sizes')?.includes('48')) ||
+        icons.find((icon) => icon.getAttribute('sizes')?.includes('64'))
+
+      if (iconWithSize?.href) {
+        return new URL(iconWithSize.href, window.location.origin).href
       }
-      
+
       // Если не нашли иконку с размером, берем первую
-      if (icons[0].getAttribute('href')) {
-        return new URL(icons[0].getAttribute('href'), window.location.origin).href;
+      if (icons[0]?.href) {
+        return new URL(icons[0].href, window.location.origin).href
       }
     }
-    
+
     // Стандартный путь к фавиконке
-    return new URL('/favicon.ico', window.location.origin).href;
+    return new URL('/favicon.ico', window.location.origin).href
   }
-  
+
   // Генерация CSS селектора для элемента
-  function generateSelector(element) {
+  function generateSelector(element: HTMLElement): string {
     // Если есть ID, используем его
     if (element.id && !element.id.includes(' ')) {
-      return `#${element.id}`;
+      return `#${element.id}`
     }
-    
+
     // Строим селектор на основе тега и атрибутов
-    let selector = element.tagName.toLowerCase();
-    
+    let selector = element.tagName.toLowerCase()
+
     // Добавляем классы (если есть)
     if (element.className && typeof element.className === 'string') {
-      const classes = element.className.split(' ')
-        .filter(c => c && !c.includes('webcheck-'));
-      
+      const classes = element.className
+        .split(' ')
+        .filter((c: string) => c && !c.includes('webcheck-'))
+
       if (classes.length > 0) {
-        selector += `.${classes.join('.')}`;
+        selector += `.${classes.join('.')}`
       }
     }
-    
+
     // Проверяем уникальность селектора
     if (document.querySelectorAll(selector).length === 1) {
-      return selector;
+      return selector
     }
-    
+
     // Если селектор не уникален, добавляем n-й child
-    let current = element;
-    let parent = element.parentElement;
-    
+    let current: HTMLElement | null = element
+    let parent = element.parentElement
+
     // Максимальное количество уровней иерархии для поиска уникального селектора
-    const MAX_LEVELS = 3;
-    let level = 0;
-    
-    while (parent && level < MAX_LEVELS) {
-      const children = Array.from(parent.children);
-      const index = children.indexOf(current) + 1;
-      
-      const parentSelector = parent.tagName.toLowerCase();
-      selector = `${parentSelector} > ${selector}:nth-child(${index})`;
-      
+    const MAX_LEVELS = 3
+    let level = 0
+
+    while (parent && level < MAX_LEVELS && current) {
+      const children = Array.from(parent.children)
+      const index = children.indexOf(current) + 1
+
+      const parentSelector = parent.tagName.toLowerCase()
+      selector = `${parentSelector} > ${selector}:nth-child(${index})`
+
       // Проверяем уникальность селектора
       if (document.querySelectorAll(selector).length === 1) {
-        return selector;
+        return selector
       }
-      
-      current = parent;
-      parent = parent.parentElement;
-      level++;
+
+      current = parent
+      parent = parent.parentElement
+      level++
     }
-    
+
     // Если не нашли уникальный селектор, используем XPath
-    return generateXPathSelector(element);
+    return generateXPathSelector(element)
   }
-  
+
   // Генерация XPath селектора для более точного нахождения элемента
-  function generateXPathSelector(element) {
-    const parts = [];
-    let current = element;
-    
+  function generateXPathSelector(element: HTMLElement): string {
+    const parts: string[] = []
+    let current: HTMLElement | null = element
+
     while (current && current !== document.body) {
-      let part = current.tagName.toLowerCase();
-      
+      let part = current.tagName.toLowerCase()
+
       // Добавляем id, если есть
       if (current.id && !current.id.includes(' ')) {
-        part += `[@id="${current.id}"]`;
-        parts.unshift(part);
-        break; // ID должен быть уникальным, прерываем поиск
+        part += `[@id="${current.id}"]`
+        parts.unshift(part)
+        break // ID должен быть уникальным, прерываем поиск
       }
-      
+
       // Определяем позицию среди одноименных тегов
       if (current.parentElement) {
-        const siblings = Array.from(current.parentElement.children)
-          .filter(el => el.tagName === current.tagName);
-        
+        const siblings = Array.from(current.parentElement.children).filter(
+          (el: Element) => el.tagName === current!.tagName
+        )
+
         if (siblings.length > 1) {
-          const index = siblings.indexOf(current) + 1;
-          part += `[${index}]`;
+          const index = siblings.indexOf(current as Element) + 1
+          part += `[${index}]`
         }
       }
-      
-      parts.unshift(part);
-      
+
+      parts.unshift(part)
+
       if (current.parentElement) {
-        current = current.parentElement;
+        current = current.parentElement
       } else {
-        break;
+        break
       }
     }
-    
-    return `//${parts.join('/')}`;
+
+    return `//${parts.join('/')}`
   }
-  
+
   // Активация выбора элемента
-  function activatePicker() {
+  function activatePicker(): void {
     // Если выбор элементов уже активен, не активируем повторно
     if (isPickerActive) {
-      console.log('[WebCheck] Element picker already active');
-      return;
+      console.log('[WebCheck] Element picker already active')
+      return
     }
-    
-    isPickerActive = true;
-    createOverlay();
-    document.addEventListener('mouseover', handleMouseOver, true);
-    document.addEventListener('click', handleClick, true);
+
+    isPickerActive = true
+    createOverlay()
+    document.addEventListener('mouseover', handleMouseOver, true)
+    document.addEventListener('click', handleClick, true)
   }
-  
+
   // Деактивация выбора элемента
-  function deactivatePicker() {
-    isPickerActive = false;
-    
+  function deactivatePicker(): void {
+    isPickerActive = false
+
     if (targetElement) {
-      targetElement.classList.remove('webcheck-highlight');
-      targetElement = null;
+      targetElement.classList.remove('webcheck-highlight')
+      targetElement = null
     }
-    
-    if (overlay && overlay.parentNode) {
-      overlay.parentNode.removeChild(overlay);
-      overlay = null;
+
+    if (overlay?.parentNode) {
+      overlay.parentNode.removeChild(overlay)
+      overlay = null
     }
-    
-    document.removeEventListener('mouseover', handleMouseOver, true);
-    document.removeEventListener('click', handleClick, true);
+
+    document.removeEventListener('mouseover', handleMouseOver, true)
+    document.removeEventListener('click', handleClick, true)
   }
-  
+
   // Обработчик сообщений от background script или popup
-  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    console.log('[WebCheck] Received message:', message.action);
-    
+  browser.runtime.onMessage.addListener((message: PickerMessage) => {
+    console.log('[WebCheck] Received message:', message.action)
+
     if (message.action === 'activateElementPicker') {
-      activatePicker();
-      sendResponse({ status: 'activated' });
-      return true;
+      activatePicker()
+      return Promise.resolve({ status: 'activated' })
     }
-    
+
     if (message.action === 'cancelElementSelection') {
-      deactivatePicker();
-      sendResponse({ status: 'cancelled' });
-      return true;
+      deactivatePicker()
+      return Promise.resolve({ status: 'cancelled' })
     }
-    
+
     if (message.action === 'ping') {
-      sendResponse({ status: 'pong' });
-      return true;
+      return Promise.resolve({ status: 'pong' })
     }
-  });
+
+    return Promise.resolve()
+  })
 }
 
 // Инициализация модуля
-initElementPicker();
+initElementPicker()
 
 // При загрузке скрипта печатаем в консоль
-console.log('[WebCheck] Element picker loaded');
+console.log('[WebCheck] Element picker loaded')

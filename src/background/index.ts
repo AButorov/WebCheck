@@ -32,8 +32,8 @@ initMonitor()
 setupOffscreenEventHandlers()
 
 // Обработка остановки расширения (cleanup)
-if (chrome.runtime.onSuspend) {
-  chrome.runtime.onSuspend.addListener(() => {
+if (browser.runtime.onSuspend) {
+  browser.runtime.onSuspend.addListener(() => {
     console.log('Background script suspending, cleaning up resources')
     stopMonitor()
   })
@@ -43,24 +43,24 @@ if (chrome.runtime.onSuspend) {
 if (process.env.NODE_ENV === 'development') {
   import('./debug')
     .then(() => console.log('Debug console loaded'))
-    .catch(error => console.warn('Failed to load debug console:', error))
+    .catch((error) => console.warn('Failed to load debug console:', error))
 }
 
 // Обработка сообщений для ручной проверки изменений (webext-bridge)
 onMessage('check-for-changes', async (message) => {
-  const { data } = message;
-  const { taskId, tabId } = data as MessagePayloads['check-for-changes'];
-  console.log(`Checking for changes for task ${taskId} in tab ${tabId}`)
-  
+  const { data } = message
+  const { tabId } = data as MessagePayloads['check-for-changes']
+  console.log(`Checking for changes in tab ${tabId}`)
+
   // Запускаем проверку задач, у которых наступило время обновления
   await checkDueTasksForUpdates()
 })
 
 // Обработка уведомлений (webext-bridge)
 onMessage('show-notification', async (message) => {
-  const { data } = message;
-  const { title, message: notificationMessage, taskId } = data as MessagePayloads['show-notification'];
-  
+  const { data } = message
+  const { title, message: notificationMessage } = data as MessagePayloads['show-notification']
+
   // Создаем уведомление
   browser.notifications.create({
     type: 'basic',
@@ -72,21 +72,21 @@ onMessage('show-notification', async (message) => {
 
 // Обработка запросов на проверку элемента (webext-bridge)
 onMessage('check-element', async (message) => {
-  const { data, sender } = message;
-  const { taskId, selector } = data as MessagePayloads['check-element'];
+  const { data } = message
+  const { taskId, selector } = data as MessagePayloads['check-element']
   console.log(`Received check-element request for task ${taskId} with selector ${selector}`)
-  
+
   try {
     // Получаем задачу из хранилища
     const storage = await browser.storage.local.get('tasks')
     const tasks = storage.tasks || []
     const task = tasks.find((t: WebCheckTask) => t.id === taskId)
-    
+
     if (!task) {
       console.error(`Task with ID ${taskId} not found`)
       return { taskId, error: 'Task not found' }
     }
-    
+
     // В реальной реализации здесь будет использоваться функция checkElement
     return {
       taskId,
@@ -96,26 +96,97 @@ onMessage('check-element', async (message) => {
     console.error('Error checking element:', error)
     return {
       taskId,
-      error: error instanceof Error ? error.message : String(error)
+      error: error instanceof Error ? error.message : String(error),
     }
   }
 })
 
-// ВРЕМЕННЫЙ ОБРАБОТЧИК ДЛЯ ТЕСТИРОВАНИЯ
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  if (request.type === 'get-monitoring-stats') {
-    getMonitoringStats()
-      .then(stats => sendResponse({ success: true, stats }))
-      .catch(error => sendResponse({ success: false, error: error.message }));
-    return true; // КРИТИЧНО для асинхронного ответа
+// Интерфейсы для статистики
+interface MonitoringStats {
+  totalTasks: number
+  activeTasks: number
+  pausedTasks: number
+  changedTasks: number
+}
+
+interface PerformanceStats {
+  memoryUsage: {
+    used: number
+    total: number
+    limit: number
+  } | null
+  timestamp: number
+}
+
+// Функции для получения статистики
+async function getMonitoringStats(): Promise<MonitoringStats> {
+  const storage = await browser.storage.local.get(['tasks'])
+  const tasks = storage.tasks || []
+
+  return {
+    totalTasks: tasks.length,
+    activeTasks: tasks.filter((task: WebCheckTask) => task.status !== 'paused').length,
+    pausedTasks: tasks.filter((task: WebCheckTask) => task.status === 'paused').length,
+    changedTasks: tasks.filter((task: WebCheckTask) => task.status === 'changed').length,
   }
-  
-  if (request.type === 'get-performance-stats') {
-    getPerformanceStats()
-      .then(stats => sendResponse({ success: true, stats }))
-      .catch(error => sendResponse({ success: false, error: error.message }));
-    return true; // КРИТИЧНО для асинхронного ответа
+}
+
+async function getPerformanceStats(): Promise<PerformanceStats> {
+  // Проверяем доступность Chrome-специфичного API
+  const chromeMemory = (
+    performance as unknown as {
+      memory?: {
+        usedJSHeapSize: number
+        totalJSHeapSize: number
+        jsHeapSizeLimit: number
+      }
+    }
+  ).memory
+
+  return {
+    memoryUsage: chromeMemory
+      ? {
+          used: Math.round(chromeMemory.usedJSHeapSize / 1024 / 1024),
+          total: Math.round(chromeMemory.totalJSHeapSize / 1024 / 1024),
+          limit: Math.round(chromeMemory.jsHeapSizeLimit / 1024 / 1024),
+        }
+      : null,
+    timestamp: Date.now(),
   }
-  
-  return false;
-});
+}
+
+// Типы для обработчика сообщений
+interface StatsRequest {
+  type: 'get-monitoring-stats' | 'get-performance-stats'
+}
+
+interface StatsResponse {
+  success: boolean
+  stats?: MonitoringStats | PerformanceStats
+  error?: string
+}
+
+// ОБРАБОТЧИК ДЛЯ ТЕСТИРОВАНИЯ
+browser.runtime.onMessage.addListener(
+  (
+    request: StatsRequest,
+    _sender: browser.Runtime.MessageSender,
+    sendResponse: (response: StatsResponse) => void
+  ): true | void => {
+    if (request.type === 'get-monitoring-stats') {
+      getMonitoringStats()
+        .then((stats) => sendResponse({ success: true, stats }))
+        .catch((error) => sendResponse({ success: false, error: error.message }))
+      return true // КРИТИЧНО для асинхронного ответа
+    }
+
+    if (request.type === 'get-performance-stats') {
+      getPerformanceStats()
+        .then((stats) => sendResponse({ success: true, stats }))
+        .catch((error) => sendResponse({ success: false, error: error.message }))
+      return true // КРИТИЧНО для асинхронного ответа
+    }
+
+    // Не возвращаем false, просто void
+  }
+)

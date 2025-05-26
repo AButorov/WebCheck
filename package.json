@@ -1,6 +1,7 @@
 {
   "name": "web-check",
   "version": "0.1.0",
+  "description": "Track changes on web pages with minimal effort",
   "private": true,
   "type": "module",
   "scripts": {

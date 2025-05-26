@@ -3,18 +3,31 @@
     <!-- Шапка экрана просмотра элемента -->
     <header class="flex items-center p-4 border-b">
       <button 
+        title="Назад"
         class="mr-2 text-gray-600 hover:text-gray-900"
         @click="goBack"
-        title="Назад"
       >
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" viewBox="0 0 20 20" fill="currentColor">
-          <path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd" />
+        <svg 
+          xmlns="http://www.w3.org/2000/svg" 
+          class="h-6 w-6" 
+          viewBox="0 0 20 20" 
+          fill="currentColor"
+        >
+          <path 
+            d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z"
+            fill-rule="evenodd" 
+            clip-rule="evenodd"
+          />
         </svg>
       </button>
       
       <div class="flex-1 mx-2 truncate">
-        <div class="text-lg font-bold truncate">{{ taskTitle }}</div>
-        <div class="text-sm text-gray-500 truncate">{{ displayUrl }}</div>
+        <div class="text-lg font-bold truncate">
+          {{ taskTitle }}
+        </div>
+        <div class="text-sm text-gray-500 truncate">
+          {{ displayUrl }}
+        </div>
       </div>
       
       <a 
@@ -22,7 +35,12 @@
         target="_blank"
         class="text-blue-600 bg-blue-50 px-3 py-1 rounded text-sm hover:bg-blue-100 whitespace-nowrap flex items-center"
       >
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
+        <svg 
+          xmlns="http://www.w3.org/2000/svg" 
+          class="h-4 w-4 mr-1" 
+          viewBox="0 0 20 20" 
+          fill="currentColor"
+        >
           <path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z" />
           <path d="M5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z" />
         </svg>
@@ -31,17 +49,36 @@
     </header>
     
     <!-- Индикатор загрузки -->
-    <div v-if="loading" class="flex flex-col items-center justify-center h-64">
-      <div class="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-blue-600"></div>
-      <p class="mt-4 text-gray-600">Загрузка изменений...</p>
+    <div 
+      v-if="loading" 
+      class="flex flex-col items-center justify-center h-64"
+    >
+      <div class="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-blue-600" />
+      <p class="mt-4 text-gray-600">
+        Загрузка изменений...
+      </p>
     </div>
     
     <!-- Ошибка загрузки -->
-    <div v-else-if="!task" class="flex flex-col items-center justify-center h-64">
-      <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 text-gray-300 mb-4" viewBox="0 0 20 20" fill="currentColor">
-        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+    <div 
+      v-else-if="!task" 
+      class="flex flex-col items-center justify-center h-64"
+    >
+      <svg 
+        xmlns="http://www.w3.org/2000/svg" 
+        class="h-16 w-16 text-gray-300 mb-4" 
+        viewBox="0 0 20 20" 
+        fill="currentColor"
+      >
+        <path 
+          d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
+          fill-rule="evenodd" 
+          clip-rule="evenodd"
+        />
       </svg>
-      <p class="text-gray-600 mb-4">Задача не найдена</p>
+      <p class="text-gray-600 mb-4">
+        Задача не найдена
+      </p>
       <button 
         class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
         @click="goBack"
@@ -51,9 +88,14 @@
     </div>
     
     <!-- Панель сравнения изменений -->
-    <div v-else class="p-4">
+    <div 
+      v-else 
+      class="p-4"
+    >
       <!-- Заголовки панелей сравнения -->
-      <div class="grid grid-cols-2 gap-4 mb-2">
+      <div 
+        class="grid grid-cols-2 gap-4 mb-2"
+      >
         <div class="bg-gray-50 rounded p-2 text-center text-sm font-medium text-gray-700">
           Исходный вид
         </div>
@@ -80,7 +122,7 @@
             :srcdoc="wrapHtmlWithStyle(task.initialHtml)" 
             class="w-full h-64"
             frameborder="0"
-          ></iframe>
+          />
         </div>
         
         <!-- Правая панель (текущий вид) -->
@@ -89,7 +131,7 @@
             :srcdoc="wrapHtmlWithStyle(task.currentHtml)" 
             class="w-full h-64"
             frameborder="0"
-          ></iframe>
+          />
         </div>
       </div>
       

@@ -4,19 +4,60 @@
  */
 
 import { testOffscreenMonitoring, getMonitoringStats } from './monitor'
-import { ensureOffscreenDocument, pingOffscreenDocument, getOffscreenStats, closeOffscreenDocument } from './offscreenManager'
+import {
+  ensureOffscreenDocument,
+  pingOffscreenDocument,
+  closeOffscreenDocument,
+} from './offscreenManager'
+
+// Типизация для Chrome API
+interface ChromeGlobal {
+  chrome?: {
+    runtime?: {
+      getContexts?: (options: {
+        contextTypes: string[]
+      }) => Promise<Array<{ creationTime?: number }>>
+    }
+  }
+}
+
+// Функция для получения статистики offscreen документа
+async function getOffscreenStats() {
+  try {
+    // Используем chrome API напрямую для отладки, так как это Chrome-специфичная функция
+    const contexts =
+      (await (globalThis as ChromeGlobal).chrome?.runtime?.getContexts?.({
+        contextTypes: ['OFFSCREEN_DOCUMENT'],
+      })) || []
+
+    const exists = contexts.length > 0
+    const cacheAge = Date.now() - (exists ? contexts[0].creationTime || 0 : 0)
+
+    return {
+      exists,
+      cacheAge,
+      contextCount: contexts.length,
+    }
+  } catch (error) {
+    return {
+      exists: false,
+      cacheAge: 0,
+      contextCount: 0,
+      error: error instanceof Error ? error.message : String(error),
+    }
+  }
+}
 
 // Добавляем функции отладки в глобальную область видимости для console
 if (typeof globalThis !== 'undefined') {
-  // @ts-ignore
+  // @ts-expect-error - Намеренно добавляем в глобальную область видимости для отладки
   globalThis.webCheckDebug = {
-    
     // Тестирование мониторинга
     async testMonitoring(url = 'https://example.com', selector = 'h1') {
       console.log('🧪 Testing offscreen monitoring...')
       await testOffscreenMonitoring(url, selector)
     },
-    
+
     // Получение статистики
     async getStats() {
       console.log('📊 Getting monitoring stats...')
@@ -24,7 +65,7 @@ if (typeof globalThis !== 'undefined') {
       console.table(stats)
       return stats
     },
-    
+
     // Проверка offscreen документа
     async checkOffscreen() {
       console.log('🖥️ Checking offscreen document...')
@@ -32,49 +73,53 @@ if (typeof globalThis !== 'undefined') {
         await ensureOffscreenDocument()
         const responsive = await pingOffscreenDocument()
         const stats = await getOffscreenStats()
-        
+
         console.log('Offscreen document status:')
         console.table({
           exists: stats.exists,
           responsive: responsive,
-          cacheAge: `${Math.round(stats.cacheAge / 1000)}s`
+          cacheAge: `${Math.round(stats.cacheAge / 1000)}s`,
         })
-        
+
         return { exists: stats.exists, responsive, cacheAge: stats.cacheAge }
       } catch (error) {
         console.error('❌ Offscreen check failed:', error)
-        return { exists: false, responsive: false, error: error.message }
+        return {
+          exists: false,
+          responsive: false,
+          error: error instanceof Error ? error.message : String(error),
+        }
       }
     },
-    
+
     // Принудительная пересоздание offscreen документа
     async resetOffscreen() {
       console.log('🔄 Resetting offscreen document...')
       try {
         await closeOffscreenDocument()
         console.log('✅ Offscreen document closed')
-        
+
         await ensureOffscreenDocument()
         console.log('✅ Offscreen document recreated')
-        
+
         return true
       } catch (error) {
         console.error('❌ Reset failed:', error)
         return false
       }
     },
-    
+
     // Тест с конкретными параметрами
-    async testSite(url, selector) {
+    async testSite(url: string, selector: string) {
       if (!url || !selector) {
         console.error('❌ Usage: testSite("https://example.com", "h1")')
         return
       }
-      
+
       console.log(`🎯 Testing ${url} with selector "${selector}"`)
       await testOffscreenMonitoring(url, selector)
     },
-    
+
     // Помощь по использованию
     help() {
       console.log(`
@@ -102,8 +147,8 @@ if (typeof globalThis !== 'undefined') {
 Example usage:
   webCheckDebug.testSite("https://news.ycombinator.com", ".title")
       `)
-    }
+    },
   }
-  
+
   console.log('🐛 WebCheck Debug Console loaded! Type webCheckDebug.help() for available commands')
 }

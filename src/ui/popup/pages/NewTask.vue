@@ -2,29 +2,57 @@
   <div class="min-h-[500px] w-[380px] h-[420px] p-3 overflow-y-auto">
     <header class="flex justify-between items-center mb-6 pb-2 border-b sticky top-0 bg-white z-10">
       <div class="flex items-center">
-        <h1 class="text-2xl font-bold">Новая задача</h1>
+        <h1 class="text-2xl font-bold">
+          Новая задача
+        </h1>
       </div>
       <button 
-        class="text-gray-600 hover:text-gray-900 p-2.5 rounded-full hover:bg-gray-100 transition-colors"
         title="Закрыть"
+        class="text-gray-600 hover:text-gray-900 p-2.5 rounded-full hover:bg-gray-100 transition-colors"
         @click="goBack"
       >
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-7 w-7" viewBox="0 0 20 20" fill="currentColor">
-          <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
+        <svg 
+          xmlns="http://www.w3.org/2000/svg" 
+          class="h-7 w-7" 
+          viewBox="0 0 20 20" 
+          fill="currentColor"
+        >
+          <path 
+            d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+            fill-rule="evenodd" 
+            clip-rule="evenodd"
+          />
         </svg>
       </button>
     </header>
     
-    <div v-if="loading" class="flex justify-center items-center h-64">
-      <div class="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-[#2d6cdf]"></div>
+    <div 
+      v-if="loading" 
+      class="flex justify-center items-center h-64"
+    >
+      <div class="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-[#2d6cdf]" />
       <span class="ml-3 text-gray-600">Загрузка...</span>
     </div>
     
-    <div v-else-if="error" class="bg-red-50 border border-red-200 rounded-xl p-4 mt-4 text-center">
-      <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 mx-auto text-red-500 mb-2" viewBox="0 0 20 20" fill="currentColor">
-        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+    <div 
+      v-else-if="error" 
+      class="bg-red-50 border border-red-200 rounded-xl p-4 mt-4 text-center"
+    >
+      <svg 
+        xmlns="http://www.w3.org/2000/svg" 
+        class="h-12 w-12 mx-auto text-red-500 mb-2" 
+        viewBox="0 0 20 20" 
+        fill="currentColor"
+      >
+        <path 
+          d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
+          fill-rule="evenodd" 
+          clip-rule="evenodd"
+        />
       </svg>
-      <p class="text-red-800 mb-2">{{ error }}</p>
+      <p class="text-red-800 mb-2">
+        {{ error }}
+      </p>
       <button 
         class="text-[#2d6cdf] hover:underline mt-2"
         @click="goBack"
@@ -33,12 +61,28 @@
       </button>
     </div>
     
-    <div v-else-if="elementSelection" class="bg-blue-50 border border-blue-200 rounded-xl p-4 mt-4 text-center">
-      <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 mx-auto text-blue-500 mb-2" viewBox="0 0 20 20" fill="currentColor">
-        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 001.415-1.415L11 9.586V6z" clip-rule="evenodd" />
+    <div 
+      v-else-if="elementSelection" 
+      class="bg-blue-50 border border-blue-200 rounded-xl p-4 mt-4 text-center"
+    >
+      <svg 
+        xmlns="http://www.w3.org/2000/svg" 
+        class="h-12 w-12 mx-auto text-blue-500 mb-2" 
+        viewBox="0 0 20 20" 
+        fill="currentColor"
+      >
+        <path 
+          d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 001.415-1.415L11 9.586V6z"
+          fill-rule="evenodd" 
+          clip-rule="evenodd"
+        />
       </svg>
-      <p class="text-blue-800 mb-2">Выберите элемент на странице для отслеживания.</p>
-      <p class="text-blue-600 text-sm mb-4">Наведите курсор на интересующий вас элемент и кликните на него.</p>
+      <p class="text-blue-800 mb-2">
+        Выберите элемент на странице для отслеживания.
+      </p>
+      <p class="text-blue-600 text-sm mb-4">
+        Наведите курсор на интересующий вас элемент и кликните на него.
+      </p>
       <button 
         class="text-[#2d6cdf] hover:underline mt-2"
         @click="cancelSelection"
@@ -50,7 +94,7 @@
     <TaskEditor 
       v-else 
       :task="task" 
-      :isEdit="false"
+      :is-edit="false"
       :debug="debug"
       @save="saveTask"
       @cancel="goBack"

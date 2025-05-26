@@ -1,6 +1,6 @@
 /**
  * Система очередей задач для фонового мониторинга WebCheck
- * 
+ *
  * Поскольку одновременно может существовать только один offscreen-документ,
  * все задачи, требующие DOM-доступа, должны обрабатываться последовательно
  */
@@ -14,7 +14,7 @@ const QUEUE_CONFIG = {
   RETRY_DELAY: 5000, // 5 секунд задержка между повторными попытками
   MAX_QUEUE_SIZE: 50, // Максимальный размер очереди
   QUEUE_TIMEOUT: 300000, // 5 минут - максимальное время жизни задачи в очереди
-  PROCESSING_TIMEOUT: 60000 // 1 минута - максимальное время на обработку одной задачи
+  PROCESSING_TIMEOUT: 60000, // 1 минута - максимальное время на обработку одной задачи
 }
 
 // Тип для элемента очереди
@@ -49,16 +49,13 @@ let queueStats = {
   totalFailed: 0,
   totalRetries: 0,
   averageProcessingTime: 0,
-  lastProcessedAt: 0
+  lastProcessedAt: 0,
 }
 
 /**
  * Добавление задачи в очередь проверки
  */
-export function addTaskToQueue(
-  task: WebCheckTask,
-  maxRetries: number = 3
-): Promise<CheckResult> {
+export function addTaskToQueue(task: WebCheckTask, maxRetries: number = 3): Promise<CheckResult> {
   return new Promise((resolve, reject) => {
     // Проверяем валидность задачи
     if (!task || typeof task !== 'object' || !task.id) {
@@ -66,7 +63,7 @@ export function addTaskToQueue(
       reject(new Error('Invalid task: missing id or malformed object'))
       return
     }
-    
+
     // Проверяем размер очереди
     if (taskQueue.length >= QUEUE_CONFIG.MAX_QUEUE_SIZE) {
       reject(new Error(`Queue is full (${QUEUE_CONFIG.MAX_QUEUE_SIZE} items)`))
@@ -74,9 +71,7 @@ export function addTaskToQueue(
     }
 
     // Проверяем, нет ли уже такой задачи в очереди
-    const existingItem = taskQueue.find(item => 
-      item && item.task && item.task.id === task.id
-    )
+    const existingItem = taskQueue.find((item) => item && item.task && item.task.id === task.id)
     if (existingItem) {
       console.warn(`[TASK QUEUE] Task ${task.id} already in queue, skipping`)
       reject(new Error(`Task ${task.id} is already queued`))
@@ -90,7 +85,7 @@ export function addTaskToQueue(
       retryCount: 0,
       maxRetries,
       resolve,
-      reject
+      reject,
     }
 
     taskQueue.push(queueItem)
@@ -121,7 +116,7 @@ async function processQueue(): Promise<void> {
 
       // Проверяем таймаут задачи
       if (Date.now() - item.addedAt > QUEUE_CONFIG.QUEUE_TIMEOUT) {
-        const taskId = (item && item.task && item.task.id) ? item.task.id : 'unknown'
+        const taskId = item && item.task && item.task.id ? item.task.id : 'unknown'
         console.warn(`[TASK QUEUE] Task ${taskId} timed out in queue`)
         if (item && item.reject) {
           item.reject(new Error('Task timed out in queue'))
@@ -153,16 +148,20 @@ async function processQueueItem(item: QueueItem): Promise<void> {
     }
     return
   }
-  
+
   const startTime = Date.now()
-  console.log(`[TASK QUEUE] Processing task ${item.task.id} (attempt ${item.retryCount + 1}/${item.maxRetries + 1})`)
+  console.log(
+    `[TASK QUEUE] Processing task ${item.task.id} (attempt ${item.retryCount + 1}/${item.maxRetries + 1})`
+  )
 
   try {
     // Проверяем наличие обязательных свойств задачи
     if (!item.task.url || !item.task.selector) {
-      throw new Error(`Invalid task: missing url (${item.task.url}) or selector (${item.task.selector})`)
+      throw new Error(
+        `Invalid task: missing url (${item.task.url}) or selector (${item.task.selector})`
+      )
     }
-    
+
     // Устанавливаем таймаут на обработку
     const processPromise = checkElement(item.task.url, item.task.selector, 1)
     const timeoutPromise = new Promise<never>((_, reject) => {
@@ -180,13 +179,13 @@ async function processQueueItem(item: QueueItem): Promise<void> {
 
     if (result.html) {
       // Успешный результат
-      const taskId = (item && item.task && item.task.id) ? item.task.id : 'unknown'
+      const taskId = item && item.task && item.task.id ? item.task.id : 'unknown'
       console.log(`[TASK QUEUE] Task ${taskId} completed successfully in ${processingTime}ms`)
-      
+
       const checkResult: CheckResult = {
         html: result.html,
         taskId: taskId,
-        timestamp: Date.now()
+        timestamp: Date.now(),
       }
 
       if (item && item.resolve) {
@@ -200,36 +199,40 @@ async function processQueueItem(item: QueueItem): Promise<void> {
       // Неожиданное состояние
       throw new Error('Invalid result: no HTML and no error')
     }
-
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error)
-    const taskId = (item && item.task && item.task.id) ? item.task.id : 'unknown'
+    const taskId = item && item.task && item.task.id ? item.task.id : 'unknown'
     console.error(`[TASK QUEUE] Error processing task ${taskId}:`, errorMessage)
 
     // Проверяем, можно ли повторить
     if (item.retryCount < item.maxRetries) {
       item.retryCount++
       queueStats.totalRetries++
-      
-      console.log(`[TASK QUEUE] Retrying task ${taskId} (attempt ${item.retryCount + 1}/${item.maxRetries + 1})`)
-      
+
+      console.log(
+        `[TASK QUEUE] Retrying task ${taskId} (attempt ${item.retryCount + 1}/${item.maxRetries + 1})`
+      )
+
       // Добавляем задержку перед повтором
       await delay(QUEUE_CONFIG.RETRY_DELAY)
-      
+
       // Возвращаем задачу в начало очереди
       taskQueue.unshift(item)
     } else {
       // Исчерпаны все попытки
       console.error(`[TASK QUEUE] Task ${taskId} failed after ${item.maxRetries + 1} attempts`)
-      
+
       const checkResult: CheckResult = {
         error: errorMessage,
         taskId: taskId,
-        timestamp: Date.now()
+        timestamp: Date.now(),
       }
 
       if (item && item.reject) {
-        item.reject(new Error(errorMessage))
+        const error = new Error(errorMessage)
+        // Добавляем дополнительную информацию в объект ошибки
+        Object.assign(error, { checkResult })
+        item.reject(error)
       }
       queueStats.totalFailed++
     }
@@ -248,7 +251,7 @@ function updateAverageProcessingTime(processingTime: number): void {
   } else {
     // Скользящее среднее
     queueStats.averageProcessingTime = Math.round(
-      (queueStats.averageProcessingTime * 0.8) + (processingTime * 0.2)
+      queueStats.averageProcessingTime * 0.8 + processingTime * 0.2
     )
   }
 }
@@ -266,7 +269,7 @@ export function getQueueStats(): {
     queueLength: taskQueue.length,
     isProcessing: isProcessingQueue,
     stats: { ...queueStats },
-    config: { ...QUEUE_CONFIG }
+    config: { ...QUEUE_CONFIG },
   }
 }
 
@@ -275,7 +278,7 @@ export function getQueueStats(): {
  */
 export function clearQueue(): void {
   console.log(`[TASK QUEUE] Clearing queue with ${taskQueue.length} items`)
-  
+
   // Отклоняем все ожидающие задачи
   while (taskQueue.length > 0) {
     const item = taskQueue.shift()
@@ -283,7 +286,7 @@ export function clearQueue(): void {
       item.reject(new Error('Queue cleared'))
     }
   }
-  
+
   console.log('[TASK QUEUE] Queue cleared')
 }
 
@@ -295,10 +298,8 @@ export function getTaskQueuePosition(taskId: string): number {
     console.warn('[TASK QUEUE] getTaskQueuePosition called with invalid taskId:', taskId)
     return -1
   }
-  
-  const index = taskQueue.findIndex(item => 
-    item && item.task && item.task.id === taskId
-  )
+
+  const index = taskQueue.findIndex((item) => item && item.task && item.task.id === taskId)
   return index === -1 ? -1 : index + 1 // Возвращаем позицию, начиная с 1
 }
 
@@ -310,11 +311,9 @@ export function removeTaskFromQueue(taskId: string): boolean {
     console.warn('[TASK QUEUE] removeTaskFromQueue called with invalid taskId:', taskId)
     return false
   }
-  
-  const index = taskQueue.findIndex(item => 
-    item && item.task && item.task.id === taskId
-  )
-  
+
+  const index = taskQueue.findIndex((item) => item && item.task && item.task.id === taskId)
+
   if (index !== -1) {
     const item = taskQueue.splice(index, 1)[0]
     if (item && item.reject) {
@@ -323,7 +322,7 @@ export function removeTaskFromQueue(taskId: string): boolean {
     console.log(`[TASK QUEUE] Task ${taskId} removed from queue`)
     return true
   }
-  
+
   return false
 }
 
@@ -335,19 +334,15 @@ export function isTaskInQueue(taskId: string): boolean {
     console.warn('[TASK QUEUE] isTaskInQueue called with invalid taskId:', taskId)
     return false
   }
-  
-  return taskQueue.some(item => 
-    item && item.task && item.task.id === taskId
-  )
+
+  return taskQueue.some((item) => item && item.task && item.task.id === taskId)
 }
 
 /**
  * Получение списка ID задач в очереди
  */
 export function getQueuedTaskIds(): string[] {
-  return taskQueue
-    .filter(item => item && item.task && item.task.id)
-    .map(item => item.task.id)
+  return taskQueue.filter((item) => item && item.task && item.task.id).map((item) => item.task.id)
 }
 
 /**
@@ -374,7 +369,7 @@ export function resetQueueStats(): void {
     totalFailed: 0,
     totalRetries: 0,
     averageProcessingTime: 0,
-    lastProcessedAt: 0
+    lastProcessedAt: 0,
   }
   console.log('[TASK QUEUE] Statistics reset')
 }
@@ -383,5 +378,5 @@ export function resetQueueStats(): void {
  * Вспомогательная функция для задержки
  */
 function delay(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms))
+  return new Promise((resolve) => setTimeout(resolve, ms))
 }
