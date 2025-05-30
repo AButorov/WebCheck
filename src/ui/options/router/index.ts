@@ -1,6 +1,7 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
 
 // Импортируем страницы
+// @ts-expect-error - Vue компонент будет корректно разрешен во время сборки
 import Index from '../pages/Index.vue'
 
 // Создаем маршруты
@@ -8,14 +9,14 @@ const routes = [
   {
     path: '/',
     name: 'index',
-    component: Index
-  }
+    component: Index,
+  },
 ]
 
 // Создаем экземпляр маршрутизатора
 const router = createRouter({
   history: createWebHashHistory(),
-  routes
+  routes,
 })
 
 // Делаем маршрутизатор доступным глобально

@@ -28,10 +28,10 @@
     
     <div 
       v-if="loading" 
-      class="flex justify-center items-center h-64"
+      class="flex flex-col justify-center items-center h-64"
     >
       <div class="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-[#2d6cdf]" />
-      <span class="ml-3 text-gray-600">Загрузка...</span>
+      <span class="ml-3 text-gray-600 mt-2">{{ loadingMessage }}</span>
     </div>
     
     <div 
@@ -81,14 +81,22 @@
         Выберите элемент на странице для отслеживания.
       </p>
       <p class="text-blue-600 text-sm mb-4">
-        Наведите курсор на интересующий вас элемент и кликните на него.
+        Popup остается открытым. Переключитесь на веб-страницу и кликните на элемент.
       </p>
-      <button 
-        class="text-[#2d6cdf] hover:underline mt-2"
-        @click="cancelSelection"
-      >
-        Отменить
-      </button>
+      <div class="flex gap-2 justify-center">
+        <button 
+          class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
+          @click="switchToManualTab"
+        >
+          Переключиться на веб-страницу
+        </button>
+        <button 
+          class="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors"
+          @click="cancelSelection"
+        >
+          Отменить
+        </button>
+      </div>
     </div>
     
     <TaskEditor 
@@ -118,227 +126,314 @@ export default defineComponent({
     const router = window.vueRouter
     const task = ref({})
     const loading = ref(true)
+    const loadingMessage = ref('Инициализация...')
     const error = ref(null)
-    const elementSelection = ref(true) // По умолчанию показываем уведомление о выборе элемента
+    const elementSelection = ref(false)
     const debug = ref(false)
     const activeTabId = ref(null)
     let messageListener = null
+    let storageCheckInterval = null
+    let pollingAttempts = 0
     
     // Проверяем наличие флага отладки
     if (import.meta.env.MODE === 'development') {
       debug.value = true;
     }
     
+    console.log('[NewTask] 🎯 NewTask component initializing...');
+    
     // Получение данных о выбранном элементе
     async function loadTaskData() {
+      console.log('[NewTask] 📂 loadTaskData called');
       loading.value = true;
+      loadingMessage.value = 'Проверка данных задачи...';
       error.value = null;
       
       try {
-        // Получаем данные из local storage, куда background script сохранил данные о задаче
+        // Сначала проверяем, есть ли уже готовые данные
         const result = await browser.storage.local.get('newTaskData');
+        console.log('[NewTask] 📋 Initial storage check result:', result);
         
         if (result.newTaskData) {
+          console.log('[NewTask] ✅ Found existing task data:', result.newTaskData);
           task.value = result.newTaskData;
-          elementSelection.value = false; // Элемент уже выбран
+          elementSelection.value = false;
+          loading.value = false;
           
-          // Удаляем данные из storage, так как они больше не нужны
+          // Удаляем данные из storage
           await browser.storage.local.remove('newTaskData');
+          console.log('[NewTask] 🗑️ Removed newTaskData from storage');
           
-          console.log('[TaskEditor] Task data loaded:', task.value);
-        } else {
-          // Данные о задаче ещё не получены, сохраняем флаг выбора элемента
-          elementSelection.value = true;
-          console.log('[NewTask] Waiting for element selection');
-          
-          // Если данных нет, активируем выбор элемента
-          activateElementSelection();
+          return; // Выходим, так как данные уже есть
         }
+        
+        // Данных нет, активируем выбор элемента
+        console.log('[NewTask] 🎯 No existing data, activating element selection');
+        await activateElementSelection();
+        
+        // Запускаем агрессивную проверку storage
+        startAggressivePolling();
+        
       } catch (err) {
-        console.error('[NewTask] Error loading task data:', err);
+        console.error('[NewTask] ❌ Error in loadTaskData:', err);
         error.value = 'Не удалось загрузить данные о задаче: ' + (err.message || 'Неизвестная ошибка');
         elementSelection.value = false;
-      } finally {
         loading.value = false;
       }
     }
     
-// Активация выбора элемента на странице
-async function activateElementSelection() {
-try {
-// Получаем активную вкладку
-const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
+    // Активация выбора элемента на странице (БЕЗ переключения вкладки)
+    async function activateElementSelection() {
+      console.log('[NewTask] 🎯 activateElementSelection called');
+      try {
+        // Получаем активную вкладку
+        const tabs = await browser.tabs.query({ active: true, currentWindow: true });
+        console.log('[NewTask] 📋 Active tabs found:', tabs.length);
 
-if (!tab) {
-throw new Error('Не удалось получить активную вкладку');
-}
+        if (!tabs.length) {
+          throw new Error('Не удалось получить активную вкладку');
+        }
 
-activeTabId.value = tab.id;
-console.log('[NewTask] Activating element selection on tab:', tab.id);
+        const tab = tabs[0];
+        activeTabId.value = tab.id;
+        console.log('[NewTask] 🔗 Active tab ID:', tab.id, 'URL:', tab.url);
 
-// Сначала отправляем сообщение в background script для активации выбора элемента
-const response = await browser.runtime.sendMessage({
-action: 'activateElementSelection',
-tabId: tab.id
-});
+        // Отправляем сообщение в background script для активации выбора элемента
+        loadingMessage.value = 'Активация выбора элемента...';
+        const response = await browser.runtime.sendMessage({
+          action: 'activateElementSelection',
+          tabId: tab.id
+        });
 
-console.log('[NewTask] Element selection activation response:', response);
+        console.log('[NewTask] 📤 Element selection activation response:', response);
 
-// Показываем уведомление о выборе элемента
-elementSelection.value = true;
+        // Показываем уведомление о выборе элемента
+        elementSelection.value = true;
+        loading.value = false;
 
-// Активируем вкладку и окно после отправки сообщения
-await browser.tabs.update(tab.id, { active: true });
-await browser.windows.update(tab.windowId, { focused: true });
-
-// Небольшая задержка для гарантированной активации вкладки
-await new Promise(resolve => setTimeout(resolve, 100));
-
-// Только после успешной активации закрываем popup
-window.close();
-
-console.log('[NewTask] Element selection activation complete');
-} catch (err) {
-console.error('[NewTask] Error activating element selection:', err);
-error.value = 'Не удалось активировать выбор элемента: ' + (err.message || 'Неизвестная ошибка');
-elementSelection.value = false;
-}
-}
+        console.log('[NewTask] ✅ Element selection activated, popup stays open');
+      } catch (err) {
+        console.error('[NewTask] ❌ Error activating element selection:', err);
+        error.value = 'Не удалось активировать выбор элемента: ' + (err.message || 'Неизвестная ошибка');
+        elementSelection.value = false;
+        loading.value = false;
+      }
+    }
+    
+    // Переключение на активную вкладку (вручную по кнопке)
+    async function switchToManualTab() {
+      console.log('[NewTask] 🔄 Switching to manual tab:', activeTabId.value);
+      try {
+        if (activeTabId.value) {
+          await browser.tabs.update(activeTabId.value, { active: true });
+          const tab = await browser.tabs.get(activeTabId.value);
+          if (tab.windowId) {
+            await browser.windows.update(tab.windowId, { focused: true });
+          }
+          console.log('[NewTask] ✅ Switched to tab successfully');
+        }
+      } catch (err) {
+        console.error('[NewTask] ❌ Error switching to tab:', err);
+      }
+    }
     
     // Отмена выбора элемента
     async function cancelSelection() {
+      console.log('[NewTask] ❌ Cancelling element selection');
       try {
         if (activeTabId.value) {
-          console.log('[NewTask] Cancelling element selection on tab:', activeTabId.value);
-          
-          // Отправляем сообщение в background script для отмены выбора элемента
           await browser.runtime.sendMessage({
             action: 'cancelElementSelection',
             tabId: activeTabId.value
           });
         }
       } catch (err) {
-        console.error('[NewTask] Error cancelling element selection:', err);
+        console.error('[NewTask] ❌ Error cancelling element selection:', err);
       }
       
-      // Возвращаемся на главную страницу
+      stopPolling();
       goBack();
     }
     
     // Сохранение задачи
     async function saveTask(editedTask) {
+      console.log('[NewTask] 💾 Saving task:', editedTask);
       try {
         loading.value = true;
+        loadingMessage.value = 'Сохранение задачи...';
         
         const result = await browser.storage.local.get('tasks');
         let tasks = [];
         
         if (result.tasks) {
-          // Проверим, является ли tasks массивом
           if (Array.isArray(result.tasks)) {
             tasks = [...result.tasks];
           } else if (typeof result.tasks === 'object') {
-            // Если это объект, преобразуем его в массив
             console.log('[NewTask] Converting tasks object to array:', result.tasks);
             tasks = Object.values(result.tasks);
           }
         }
         
-        // Добавляем новую задачу
         tasks.push(editedTask);
+        await browser.storage.local.set({ tasks: tasks });
         
-        // Убедимся, что сохраняем действительно массив
-        if (!Array.isArray(tasks)) {
-          console.error('[NewTask] Tasks is still not an array after conversion!', tasks);
-          tasks = [editedTask]; // На крайний случай просто создаем массив с одной новой задачей
-        }
+        console.log('[NewTask] ✅ Task saved successfully:', editedTask.id);
         
-        console.log('[NewTask] Saving tasks array:', tasks);
-        await browser.storage.local.set({ tasks: tasks }); // Явно указываем tasks
-        
-        console.log('[NewTask] Task saved successfully:', editedTask);
-        
-        // Возвращаемся на главную страницу
+        stopPolling();
         goBack();
         
       } catch (err) {
-        console.error('[NewTask] Error saving task:', err);
+        console.error('[NewTask] ❌ Error saving task:', err);
         error.value = 'Не удалось сохранить задачу: ' + (err.message || 'Неизвестная ошибка');
-      } finally {
         loading.value = false;
       }
     }
     
     // Возврат на главную страницу
     function goBack() {
+      console.log('[NewTask] 🔙 Going back to main page');
+      stopPolling();
+      
       if (router) {
         router.push('/');
       } else {
-        console.warn('[NewTask] Router not available');
-        window.close(); // Закрываем popup, если роутер недоступен
+        console.warn('[NewTask] Router not available, closing popup');
+        window.close();
       }
     }
     
-    // Обработчик сообщений от background script
-    function setupMessageListener() {
-      messageListener = (message, sender, sendResponse) => {
-        console.log('[NewTask] Received message:', message);
+    // Агрессивная проверка storage (каждые 300ms)
+    function startAggressivePolling() {
+      console.log('[NewTask] 🔄 Starting AGGRESSIVE polling every 300ms');
+      loadingMessage.value = 'Ожидание выбора элемента...';
+      pollingAttempts = 0;
+      
+      storageCheckInterval = setInterval(async () => {
+        pollingAttempts++;
+        console.log(`[NewTask] 🔍 Polling attempt #${pollingAttempts}`);
         
-        // Обработка ping-сообщения
+        try {
+          const result = await browser.storage.local.get('newTaskData');
+          
+          if (result.newTaskData) {
+            console.log('[NewTask] 🎉 FOUND newTaskData via aggressive polling:', result.newTaskData);
+            
+            // Немедленно обновляем UI
+            task.value = result.newTaskData;
+            elementSelection.value = false;
+            loading.value = false;
+            
+            // Удаляем данные из storage
+            await browser.storage.local.remove('newTaskData');
+            console.log('[NewTask] 🗑️ newTaskData removed from storage');
+            
+            // Останавливаем polling
+            stopPolling();
+            
+            console.log('[NewTask] 🎯 Task editor should now be visible!');
+            return;
+          }
+          
+          // Обновляем сообщение каждые 10 попыток
+          if (pollingAttempts % 10 === 0) {
+            loadingMessage.value = `Ожидание выбора элемента... (${pollingAttempts}/100)`;
+            console.log(`[NewTask] 💭 Still waiting after ${pollingAttempts} attempts`);
+          }
+          
+          // Останавливаем после 100 попыток (30 секунд)
+          if (pollingAttempts >= 100) {
+            console.log('[NewTask] ⏰ Stopping polling due to timeout');
+            stopPolling();
+            error.value = 'Превышено время ожидания выбора элемента. Попробуйте еще раз.';
+            loading.value = false;
+            elementSelection.value = false;
+          }
+          
+        } catch (err) {
+          console.error('[NewTask] ❌ Error in aggressive polling:', err);
+        }
+      }, 300); // Каждые 300ms для максимально быстрого ответа
+    }
+    
+    function stopPolling() {
+      if (storageCheckInterval) {
+        clearInterval(storageCheckInterval);
+        storageCheckInterval = null;
+        console.log('[NewTask] ⏹️ Polling stopped');
+      }
+    }
+    
+    // Обработчик сообщений от background script (запасной вариант)
+    function setupMessageListener() {
+      console.log('[NewTask] 📞 Setting up message listener');
+      messageListener = (message, sender, sendResponse) => {
+        console.log('[NewTask] 📨 Received message:', message);
+        
         if (message.action === 'ping') {
+          console.log('[NewTask] 🏓 Ping received');
           sendResponse({ status: 'pong' });
           return true;
         }
         
         if (message.action === 'elementCaptured') {
-          // Элемент успешно выбран и данные получены
-          console.log('[NewTask] Element captured, task data received:', message.task);
+          console.log('[NewTask] 🎯 Element captured via direct message!');
           task.value = message.task;
           elementSelection.value = false;
           loading.value = false;
-          
-          // Сразу показываем форму редактирования
-          console.log('[NewTask] Showing task editor form immediately');
-        } else if (message.action === 'captureError') {
-          // Ошибка при захвате элемента
-          error.value = 'Ошибка при захвате элемента: ' + message.error;
-          elementSelection.value = false;
-          loading.value = false;
-        } else if (message.action === 'elementSelectionCancelled') {
-          // Отмена выбора элемента
-          goBack();
-        } else if (message.action === 'elementSelectionError') {
-          // Ошибка при активации выбора элемента
-          error.value = 'Ошибка при активации выбора элемента: ' + message.error;
-          elementSelection.value = false;
-          loading.value = false;
+          stopPolling();
+          sendResponse({ received: true });
         }
+        
+        // Другие обработчики...
       };
       
       browser.runtime.onMessage.addListener(messageListener);
-      return messageListener;
+    }
+    
+    // Слушатель изменений storage (дополнительный механизм)
+    function setupStorageListener() {
+      console.log('[NewTask] 📂 Setting up storage listener');
+      browser.storage.onChanged.addListener((changes, namespace) => {
+        console.log('[NewTask] 📂 Storage changed:', Object.keys(changes), 'namespace:', namespace);
+        
+        if (namespace === 'local' && changes.newTaskData && changes.newTaskData.newValue) {
+          console.log('[NewTask] 🎉 newTaskData detected via storage listener!');
+          
+          task.value = changes.newTaskData.newValue;
+          elementSelection.value = false;
+          loading.value = false;
+          stopPolling();
+          
+          // Удаляем данные
+          browser.storage.local.remove('newTaskData');
+          console.log('[NewTask] 🎯 Task editor activated via storage listener!');
+        }
+      });
     }
     
     // Загрузка данных при монтировании компонента
     onMounted(() => {
-      // Настраиваем обработчик сообщений
+      console.log('[NewTask] 🎬 Component mounted - setting up everything');
+      
+      // Настраиваем все обработчики
       setupMessageListener();
+      setupStorageListener();
       
-      // Загружаем данные о задаче, если они есть
+      // Начинаем основную логику
       loadTaskData();
-      
-      // Не активируем выбор элемента автоматически
-      // Это будет сделано внутри loadTaskData, если данные не найдены
     });
     
     // Очистка при размонтировании компонента
     onUnmounted(() => {
+      console.log('[NewTask] 🎬 Component unmounting - cleaning up');
+      
+      stopPolling();
+      
       if (messageListener) {
         browser.runtime.onMessage.removeListener(messageListener);
       }
       
       if (activeTabId.value && elementSelection.value) {
-        // Пытаемся отменить выбор элемента при закрытии страницы
         try {
           browser.runtime.sendMessage({
             action: 'cancelElementSelection',
@@ -353,12 +448,14 @@ elementSelection.value = false;
     return {
       task,
       loading,
+      loadingMessage,
       error,
       elementSelection,
       debug,
       saveTask,
       goBack,
-      cancelSelection
+      cancelSelection,
+      switchToManualTab
     };
   }
 });

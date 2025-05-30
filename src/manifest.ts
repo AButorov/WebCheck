@@ -4,9 +4,7 @@ import packageJson from '../package.json'
 const { version, name, description } = packageJson
 
 // Convert from Semver (example: 0.1.0-beta6)
-const [major, minor, patch, label = '0'] = version
-  .replace(/[^\d.-]/g, '')
-  .split(/[.-]/)
+const [major, minor, patch, label = '0'] = version.replace(/[^\d.-]/g, '').split(/[.-]/)
 
 export default defineManifest(async (env) => ({
   manifest_version: 3,
@@ -40,13 +38,13 @@ export default defineManifest(async (env) => ({
   content_scripts: [
     {
       matches: ['http://*/*', 'https://*/*'],
-      js: ['src/content-script/index.ts'],
-      all_frames: true // Поддержка всех фреймов для offscreen API
-    }
+      js: ['src/content-script/index-legacy.js'],
+      all_frames: true, // Поддержка всех фреймов для offscreen API
+    },
   ],
   // CSP для MV3 - максимально строгая, без unsafe-eval
   content_security_policy: {
-    extension_pages: "script-src 'self'; object-src 'self'; style-src 'self' 'unsafe-inline';"
+    extension_pages: "script-src 'self'; object-src 'self'; style-src 'self' 'unsafe-inline';",
   },
   permissions: [
     'storage',
@@ -56,20 +54,13 @@ export default defineManifest(async (env) => ({
     'activeTab',
     'tabs',
     'tabCapture',
-    'offscreen'
+    'offscreen',
   ],
-  host_permissions: [
-    'http://*/*',
-    'https://*/*',
-    '<all_urls>'
-  ],
+  host_permissions: ['http://*/*', 'https://*/*', '<all_urls>'],
   web_accessible_resources: [
     {
-      resources: [
-        'content-script/*',
-        'icons/*'
-      ],
-      matches: ['<all_urls>']
-    }
-  ]
+      resources: ['content-script/*', 'icons/*', 'offscreen/*'],
+      matches: ['<all_urls>'],
+    },
+  ],
 }))

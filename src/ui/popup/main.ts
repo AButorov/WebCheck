@@ -1,4 +1,5 @@
 import { createApp } from 'vue'
+// @ts-expect-error - Vue компонент будет корректно разрешен во время сборки
 import App from './App.vue'
 import router from './router'
 import '~/assets/styles/tailwind.css'
@@ -41,7 +42,7 @@ const t = (key: string): string => {
   const langMessages = messages[userLang] || messages.en
   const keys = key.split('.')
   let result: unknown = langMessages
-  
+
   // Navigate through the nested keys
   for (const k of keys) {
     if (result && typeof result === 'object' && !Array.isArray(result) && k in result) {
@@ -50,7 +51,7 @@ const t = (key: string): string => {
       return key // Return key if not found
     }
   }
-  
+
   return typeof result === 'string' ? result : key
 }
 
@@ -68,7 +69,7 @@ window.t = t
 // Error handler
 app.config.errorHandler = (err) => {
   console.error('[CSP-SAFE] Error:', err)
-  
+
   // Try to render error in UI
   const appElement = document.getElementById('app')
   if (appElement) {

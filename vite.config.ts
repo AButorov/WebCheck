@@ -9,14 +9,8 @@ import manifest from './src/manifest'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
-// Проверка наличия Terser
-let hasTerser = true
-try {
-  require.resolve('terser')
-} catch (e) {
-  hasTerser = false
-  console.warn('Terser не найден. Будет использована минификация esbuild.')
-}
+// Используем esbuild для минификации (более надёжно для ES модулей)
+const hasTerser = false
 
 // https://vitejs.dev/config/
 export default defineConfig({
@@ -35,21 +29,21 @@ export default defineConfig({
           comments: false,
         },
       },
-      reactivityTransform: false, // Отключаем трансформацию реактивности
     }),
-    crx({ manifest }),
+    crx({
+      manifest,
+      // Настройки для правильной сборки content scripts
+      contentScripts: {
+        injectCss: true,
+      },
+    }),
     AutoImport({
       imports: [
         'vue',
         'vue-router',
         'vue-i18n',
         {
-          '@vueuse/core': [
-            'useDark',
-            'useToggle',
-            'useLocalStorage',
-            'useStorage',
-          ],
+          '@vueuse/core': ['useDark', 'useToggle', 'useLocalStorage', 'useStorage'],
         },
       ],
       dts: resolve(__dirname, 'src/auto-imports.d.ts'),
@@ -65,13 +59,23 @@ export default defineConfig({
       input: {
         popup: resolve(__dirname, 'src/ui/popup/index.html'),
         options: resolve(__dirname, 'src/ui/options/index.html'),
+        offscreen: resolve(__dirname, 'src/offscreen/index.html'),
       },
       output: {
-        entryFileNames: chunk => {
+        entryFileNames: (chunk) => {
+          if (chunk.name === 'offscreen') {
+            return 'offscreen/index.js'
+          }
           return 'src/ui/[name]/index.js'
         },
         chunkFileNames: 'assets/js/[name].js',
         assetFileNames: (assetInfo) => {
+          // Проверяем offscreen HTML по содержимому
+          if (assetInfo.name === 'index.html' && 
+              typeof assetInfo.source === 'string' && 
+              assetInfo.source.includes('offscreen-container')) {
+            return 'offscreen/offscreen.html'
+          }
           if (assetInfo.name === 'index.css') {
             return 'assets/css/[name][extname]'
           }
@@ -85,14 +89,14 @@ export default defineConfig({
     cssCodeSplit: false,
     assetsInlineLimit: 0,
     // Отключаем использование @charset в css
-    cssTarget: ['chrome89', 'edge89', 'firefox89', 'safari15']
+    cssTarget: ['chrome89', 'edge89', 'firefox89', 'safari15'],
   },
   define: {
     // Настройки для Vue 3
-    '__VUE_OPTIONS_API__': true,
-    '__VUE_PROD_DEVTOOLS__': false, 
+    __VUE_OPTIONS_API__: true,
+    __VUE_PROD_DEVTOOLS__: false,
     // Строгий режим (отключаем eval)
-    '__VUE_PROD_HYDRATION_MISMATCH_DETAILS__': false,
+    __VUE_PROD_HYDRATION_MISMATCH_DETAILS__: false,
     // Режим компиляции
     'process.env.NODE_ENV': JSON.stringify('production'),
     // Отключаем функции, которые используют eval()

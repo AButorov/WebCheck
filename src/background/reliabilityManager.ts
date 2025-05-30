@@ -1,297 +1,465 @@
 /**
- * Менеджер надёжности для offscreen-документов WebCheck
- *
- * Этот модуль отвечает за:
- * 1. Мониторинг здоровья offscreen-документов
- * 2. Автоматическое восстановление при сбоях
- * 3. Управление жизненным циклом документов
- * 4. Обработку критических ошибок
+ * Менеджер надежности системы коммуникации
+ * Отслеживает состояние content scripts и восстанавливает связь при необходимости
  */
 
 import browser from 'webextension-polyfill'
-import {
-  ensureOffscreenDocument,
-  hasOffscreenDocument,
-  closeOffscreenDocument,
-  pingOffscreenDocument,
-  invalidateCache,
-} from './offscreenManager'
+import { checkContentScriptReady, injectContentScriptsIntoAllTabs } from './safeMessaging'
 
-// Конфигурация менеджера надёжности
-const RELIABILITY_CONFIG = {
-  HEALTH_CHECK_INTERVAL: 30000, // 30 секунд между проверками здоровья
-  MAX_RECOVERY_ATTEMPTS: 3, // Максимальное количество попыток восстановления
-  RECOVERY_DELAY: 5000, // 5 секунд задержка между попытками восстановления
-  DOCUMENT_IDLE_TIMEOUT: 300000, // 5 минут бездействия перед закрытием документа
-  ERROR_THRESHOLD: 5, // Количество ошибок подряд перед принудительным восстановлением
-  PING_TIMEOUT: 10000, // 10 секунд таймаут для ping
+interface TabState {
+  id: number
+  url?: string
+  contentScriptReady: boolean
+  lastPingTime: number
+  injectionAttempts: number
+  lastInjectionTime: number
 }
 
-// Состояние менеджера надёжности
-interface ReliabilityState {
-  isHealthy: boolean
-  lastHealthCheck: number
-  consecutiveErrors: number
-  totalRecoveries: number
-  lastRecoveryAt: number
-  lastActivityAt: number
-  currentErrors: string[]
-}
+export class ReliabilityManager {
+  private tabStates = new Map<number, TabState>()
+  private healthCheckInterval: number | null = null
+  private readonly HEALTH_CHECK_INTERVAL = 30000 // 30 секунд
+  private readonly MAX_INJECTION_ATTEMPTS = 3
+  private readonly INJECTION_COOLDOWN = 10000 // 10 секунд
 
-// Текущее состояние
-let reliabilityState: ReliabilityState = {
-  isHealthy: true,
-  lastHealthCheck: 0,
-  consecutiveErrors: 0,
-  totalRecoveries: 0,
-  lastRecoveryAt: 0,
-  lastActivityAt: Date.now(),
-  currentErrors: [],
-}
-
-// Интервал проверки здоровья
-let healthCheckInterval: NodeJS.Timeout | null = null
-
-// Флаг активности восстановления
-let isRecovering = false
-
-/**
- * Инициализация менеджера надёжности
- */
-export function initReliabilityManager(): void {
-  console.log('[RELIABILITY] Initializing reliability manager')
-
-  // Запускаем периодические проверки здоровья
-  startHealthChecks()
-
-  // Устанавливаем обработчики событий браузера
-  setupBrowserEventHandlers()
-
-  console.log('[RELIABILITY] Reliability manager initialized')
-}
-
-/**
- * Остановка менеджера надёжности
- */
-export function stopReliabilityManager(): void {
-  console.log('[RELIABILITY] Stopping reliability manager')
-
-  if (healthCheckInterval) {
-    clearInterval(healthCheckInterval)
-    healthCheckInterval = null
+  constructor() {
+    console.log('[RELIABILITY] Reliability manager initialized')
+    this.setupEventListeners()
+    this.startHealthChecks()
   }
 
-  console.log('[RELIABILITY] Reliability manager stopped')
-}
-
-/**
- * Запуск периодических проверок здоровья
- */
-function startHealthChecks(): void {
-  // Останавливаем предыдущий интервал, если он был
-  if (healthCheckInterval) {
-    clearInterval(healthCheckInterval)
-  }
-
-  // Запускаем новый интервал
-  healthCheckInterval = setInterval(async () => {
-    await performHealthCheck()
-  }, RELIABILITY_CONFIG.HEALTH_CHECK_INTERVAL)
-
-  // Выполняем первую проверку сразу
-  performHealthCheck()
-}
-
-/**
- * Выполнение проверки здоровья offscreen-документа
- */
-async function performHealthCheck(): Promise<boolean> {
-  const now = Date.now()
-  reliabilityState.lastHealthCheck = now
-
-  console.log('[RELIABILITY] Performing health check')
-
-  try {
-    // Сбрасываем кэш для точной проверки
-    invalidateCache()
-
-    // Проверяем существование документа
-    const documentExists = await hasOffscreenDocument()
-
-    if (!documentExists) {
-      console.log('[RELIABILITY] Document does not exist')
-      reliabilityState.isHealthy = false
-      addError('Document does not exist')
-      return false
-    }
-
-    // Проверяем отзывчивость документа
-    const isResponsive = await performPingWithTimeout()
-
-    if (!isResponsive) {
-      console.warn('[RELIABILITY] Document is not responsive')
-      reliabilityState.isHealthy = false
-      addError('Document is not responsive')
-      return false
-    }
-
-    // Все проверки прошли успешно
-    console.log('[RELIABILITY] Health check passed')
-    reliabilityState.isHealthy = true
-    reliabilityState.consecutiveErrors = 0
-    reliabilityState.currentErrors = []
-
-    // Проверяем, нужно ли закрыть документ из-за бездействия
-    checkIdleTimeout()
-
-    return true
-  } catch (error) {
-    console.error('[RELIABILITY] Health check failed:', error)
-    reliabilityState.isHealthy = false
-    addError(error instanceof Error ? error.message : String(error))
-    return false
-  }
-}
-
-/**
- * Ping с таймаутом
- */
-async function performPingWithTimeout(): Promise<boolean> {
-  try {
-    const pingPromise = pingOffscreenDocument()
-    const timeoutPromise = new Promise<boolean>((_, reject) => {
-      setTimeout(() => reject(new Error('Ping timeout')), RELIABILITY_CONFIG.PING_TIMEOUT)
+  /**
+   * Настройка обработчиков событий браузера
+   */
+  private setupEventListeners(): void {
+    // Отслеживание создания новых табов
+    browser.tabs.onCreated.addListener((tab) => {
+      if (tab.id) {
+        this.addTab(tab.id, tab.url)
+      }
     })
 
-    return await Promise.race([pingPromise, timeoutPromise])
-  } catch (error) {
-    console.warn('[RELIABILITY] Ping failed:', error)
-    return false
-  }
-}
+    // Отслеживание обновления табов
+    browser.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+      if (changeInfo.status === 'complete' && tab.url) {
+        this.updateTab(tabId, tab.url)
 
-/**
- * Добавление ошибки в список текущих ошибок
- */
-function addError(error: string): void {
-  reliabilityState.currentErrors.push(error)
-  reliabilityState.consecutiveErrors++
+        // Проверяем готовность content script после загрузки страницы
+        setTimeout(() => {
+          this.checkTabHealth(tabId)
+        }, 1000)
+      }
+    })
 
-  // Ограничиваем размер списка ошибок
-  if (reliabilityState.currentErrors.length > 10) {
-    reliabilityState.currentErrors = reliabilityState.currentErrors.slice(-10)
-  }
+    // Отслеживание закрытия табов
+    browser.tabs.onRemoved.addListener((tabId) => {
+      this.removeTab(tabId)
+    })
 
-  // Проверяем, нужно ли запустить восстановление
-  if (reliabilityState.consecutiveErrors >= RELIABILITY_CONFIG.ERROR_THRESHOLD) {
-    console.warn(
-      `[RELIABILITY] Error threshold reached (${reliabilityState.consecutiveErrors} errors)`
-    )
-    triggerRecovery()
-  }
-}
-
-/**
- * Запуск процесса восстановления
- */
-async function triggerRecovery(): Promise<void> {
-  if (isRecovering) {
-    console.log('[RELIABILITY] Recovery already in progress')
-    return
+    // Отслеживание сообщений о готовности content script
+    browser.runtime.onMessage.addListener((message, sender) => {
+      if (message.action === 'contentScriptReady' && sender.tab?.id) {
+        this.markTabAsReady(sender.tab.id)
+      }
+    })
   }
 
-  isRecovering = true
-  console.log('[RELIABILITY] Starting recovery process')
+  /**
+   * Добавление нового таба в отслеживание
+   */
+  private addTab(tabId: number, url?: string): void {
+    this.tabStates.set(tabId, {
+      id: tabId,
+      url,
+      contentScriptReady: false,
+      lastPingTime: 0,
+      injectionAttempts: 0,
+      lastInjectionTime: 0,
+    })
 
-  let recoverySuccess = false
+    console.log(`[RELIABILITY] Added tab ${tabId} to monitoring`)
+  }
 
-  for (let attempt = 1; attempt <= RELIABILITY_CONFIG.MAX_RECOVERY_ATTEMPTS; attempt++) {
-    console.log(
-      `[RELIABILITY] Recovery attempt ${attempt}/${RELIABILITY_CONFIG.MAX_RECOVERY_ATTEMPTS}`
-    )
+  /**
+   * Обновление информации о табе
+   */
+  private updateTab(tabId: number, url: string): void {
+    const tabState = this.tabStates.get(tabId)
+    if (tabState) {
+      tabState.url = url
+      tabState.contentScriptReady = false // Сбрасываем статус при обновлении страницы
+      console.log(`[RELIABILITY] Updated tab ${tabId} URL: ${url}`)
+    } else {
+      this.addTab(tabId, url)
+    }
+  }
+
+  /**
+   * Удаление таба из отслеживания
+   */
+  private removeTab(tabId: number): void {
+    this.tabStates.delete(tabId)
+    console.log(`[RELIABILITY] Removed tab ${tabId} from monitoring`)
+  }
+
+  /**
+   * Отметка таба как готового
+   */
+  private markTabAsReady(tabId: number): void {
+    const tabState = this.tabStates.get(tabId)
+    if (tabState) {
+      tabState.contentScriptReady = true
+      tabState.lastPingTime = Date.now()
+      console.log(`[RELIABILITY] Tab ${tabId} marked as ready`)
+    }
+  }
+
+  /**
+   * Запуск периодических проверок здоровья
+   */
+  private startHealthChecks(): void {
+    if (this.healthCheckInterval) {
+      clearInterval(this.healthCheckInterval)
+    }
+
+    this.healthCheckInterval = setInterval(() => {
+      this.performHealthCheck()
+    }, this.HEALTH_CHECK_INTERVAL) as unknown as number
+
+    console.log('[RELIABILITY] Health checks started')
+  }
+
+  /**
+   * Остановка проверок здоровья
+   */
+  public stopHealthChecks(): void {
+    if (this.healthCheckInterval) {
+      clearInterval(this.healthCheckInterval)
+      this.healthCheckInterval = null
+      console.log('[RELIABILITY] Health checks stopped')
+    }
+  }
+
+  /**
+   * Выполнение проверки здоровья всех табов
+   */
+  private async performHealthCheck(): Promise<void> {
+    console.log('[RELIABILITY] Performing health check')
 
     try {
-      // Закрываем текущий документ
-      await forceCloseDocument()
+      // Получаем список всех табов
+      const tabs = await browser.tabs.query({})
 
-      // Ждём некоторое время
-      await delay(RELIABILITY_CONFIG.RECOVERY_DELAY)
+      // Проверяем каждый таб
+      for (const tab of tabs) {
+        if (tab.id) {
+          await this.checkTabHealth(tab.id)
+        }
+      }
 
-      // Создаём новый документ
-      await ensureOffscreenDocument()
-
-      // Проверяем, что новый документ работает
-      const isHealthy = await performHealthCheck()
-
-      if (isHealthy) {
-        console.log(`[RELIABILITY] Recovery successful on attempt ${attempt}`)
-        recoverySuccess = true
-        break
-      } else {
-        console.warn(`[RELIABILITY] Recovery attempt ${attempt} failed - document not healthy`)
+      // Очищаем состояния для несуществующих табов
+      const existingTabIds = new Set(tabs.map((tab) => tab.id).filter(Boolean))
+      for (const tabId of this.tabStates.keys()) {
+        if (!existingTabIds.has(tabId)) {
+          this.removeTab(tabId)
+        }
       }
     } catch (error) {
-      console.error(`[RELIABILITY] Recovery attempt ${attempt} failed:`, error)
-    }
-
-    // Задержка перед следующей попыткой
-    if (attempt < RELIABILITY_CONFIG.MAX_RECOVERY_ATTEMPTS) {
-      await delay(RELIABILITY_CONFIG.RECOVERY_DELAY)
+      console.error('[RELIABILITY] Error during health check:', error)
     }
   }
 
-  if (recoverySuccess) {
-    reliabilityState.totalRecoveries++
-    reliabilityState.lastRecoveryAt = Date.now()
-    reliabilityState.consecutiveErrors = 0
-    reliabilityState.currentErrors = []
-    reliabilityState.isHealthy = true
-    console.log('[RELIABILITY] Recovery completed successfully')
-  } else {
-    console.error('[RELIABILITY] Recovery failed after all attempts')
-    reliabilityState.isHealthy = false
+  /**
+   * Проверка здоровья конкретного таба
+   */
+  private async checkTabHealth(tabId: number): Promise<boolean> {
+    try {
+      const tab = await browser.tabs.get(tabId)
+
+      // Проверяем, что таб подходит для инжекции content script
+      if (!tab.url || this.isSystemUrl(tab.url)) {
+        return false
+      }
+
+      // Обновляем состояние таба
+      if (!this.tabStates.has(tabId)) {
+        this.addTab(tabId, tab.url)
+      }
+
+      // Проверяем готовность content script
+      const isReady = await checkContentScriptReady(tabId, 3000)
+
+      if (isReady) {
+        this.markTabAsReady(tabId)
+        return true
+      } else {
+        console.log(`[RELIABILITY] Tab ${tabId} content script not ready, attempting recovery`)
+        return await this.recoverTab(tabId)
+      }
+    } catch (error) {
+      console.warn(`[RELIABILITY] Error checking tab ${tabId} health:`, error)
+      return false
+    }
   }
 
-  isRecovering = false
+  /**
+   * Восстановление работы content script в табе
+   */
+  private async recoverTab(tabId: number): Promise<boolean> {
+    const tabState = this.tabStates.get(tabId)
+    if (!tabState) {
+      return false
+    }
+
+    const now = Date.now()
+
+    // Проверяем, не превышен ли лимит попыток инжекции
+    if (tabState.injectionAttempts >= this.MAX_INJECTION_ATTEMPTS) {
+      const timeSinceLastInjection = now - tabState.lastInjectionTime
+      if (timeSinceLastInjection < this.INJECTION_COOLDOWN) {
+        return false // Еще в периоде охлаждения
+      } else {
+        // Сбрасываем счетчик после периода охлаждения
+        tabState.injectionAttempts = 0
+      }
+    }
+
+    try {
+      console.log(`[RELIABILITY] Attempting to recover tab ${tabId}`)
+
+      // Пробуем инжектировать content script
+      await browser.scripting.executeScript({
+        target: { tabId },
+        files: ['assets/js/index-legacy.js.js'],
+      })
+
+      tabState.injectionAttempts++
+      tabState.lastInjectionTime = now
+
+      // Ждем инициализации и проверяем готовность
+      await new Promise((resolve) => setTimeout(resolve, 1000))
+
+      const isReady = await checkContentScriptReady(tabId, 3000)
+
+      if (isReady) {
+        this.markTabAsReady(tabId)
+        console.log(`[RELIABILITY] Successfully recovered tab ${tabId}`)
+        return true
+      } else {
+        console.warn(`[RELIABILITY] Failed to recover tab ${tabId}`)
+        return false
+      }
+    } catch (error) {
+      tabState.injectionAttempts++
+      tabState.lastInjectionTime = now
+      console.error(`[RELIABILITY] Error recovering tab ${tabId}:`, error)
+      return false
+    }
+  }
+
+  /**
+   * Проверка системных URL
+   */
+  private isSystemUrl(url: string): boolean {
+    return [
+      'chrome://',
+      'chrome-extension://',
+      'moz-extension://',
+      'edge://',
+      'about:',
+      'data:',
+      'file:',
+    ].some((prefix) => url.startsWith(prefix))
+  }
+
+  /**
+   * Проверка готовности таба для отправки сообщений
+   */
+  public async ensureTabReady(tabId: number): Promise<boolean> {
+    console.log(`[RELIABILITY] Ensuring tab ${tabId} is ready`)
+
+    // Сначала быстрая проверка из кеша
+    const tabState = this.tabStates.get(tabId)
+    if (tabState?.contentScriptReady) {
+      const timeSinceLastPing = Date.now() - tabState.lastPingTime
+      if (timeSinceLastPing < 60000) {
+        // Считаем готовым, если пинг был менее минуты назад
+        return true
+      }
+    }
+
+    // Полная проверка и восстановление при необходимости
+    return await this.checkTabHealth(tabId)
+  }
+
+  /**
+   * Получение статистики надежности
+   */
+  public getStats(): { totalTabs: number; readyTabs: number; problemTabs: number } {
+    const totalTabs = this.tabStates.size
+    let readyTabs = 0
+    let problemTabs = 0
+
+    for (const tabState of this.tabStates.values()) {
+      if (tabState.contentScriptReady) {
+        readyTabs++
+      } else {
+        problemTabs++
+      }
+    }
+
+    return { totalTabs, readyTabs, problemTabs }
+  }
+
+  /**
+   * Принудительная переинжекция во все табы
+   */
+  public async forceReinjectAll(): Promise<void> {
+    console.log('[RELIABILITY] Force reinjecting content scripts into all tabs')
+
+    try {
+      await injectContentScriptsIntoAllTabs()
+
+      // Сбрасываем состояния всех табов
+      for (const tabState of this.tabStates.values()) {
+        tabState.contentScriptReady = false
+        tabState.injectionAttempts = 0
+        tabState.lastInjectionTime = 0
+      }
+
+      // Ждем инициализации и проверяем все табы
+      setTimeout(() => {
+        this.performHealthCheck()
+      }, 2000)
+    } catch (error) {
+      console.error('[RELIABILITY] Error during force reinject:', error)
+    }
+  }
+
+  /**
+   * Регистрация активности системы
+   */
+  public registerActivity(): void {
+    console.log('[RELIABILITY] Activity registered')
+    // Обновляем время последней активности для всех готовых табов
+    const now = Date.now()
+    for (const tabState of this.tabStates.values()) {
+      if (tabState.contentScriptReady) {
+        tabState.lastPingTime = now
+      }
+    }
+  }
+
+  /**
+   * Выполнение операции с повторными попытками при ошибке
+   */
+  public async withReliability<T>(
+    operation: () => Promise<T>,
+    maxRetries: number = 3,
+    delay: number = 1000
+  ): Promise<T> {
+    let lastError: Error
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        console.log(`[RELIABILITY] Executing operation (attempt ${attempt}/${maxRetries})`)
+        const result = await operation()
+        console.log(`[RELIABILITY] Operation succeeded on attempt ${attempt}`)
+        return result
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error))
+        console.warn(
+          `[RELIABILITY] Operation failed on attempt ${attempt}/${maxRetries}:`,
+          lastError.message
+        )
+
+        if (attempt < maxRetries) {
+          console.log(`[RELIABILITY] Waiting ${delay}ms before retry`)
+          await new Promise((resolve) => setTimeout(resolve, delay))
+        }
+      }
+    }
+
+    console.error(`[RELIABILITY] Operation failed after ${maxRetries} attempts`)
+    throw lastError!
+  }
+}
+
+// Создаем глобальный экземпляр менеджера надежности
+export const reliabilityManager = new ReliabilityManager()
+
+/**
+ * Утилитарные функции для удобного использования менеджера надежности
+ */
+
+/**
+ * Инициализация менеджера надежности
+ */
+export function initReliabilityManager(): void {
+  // Менеджер уже инициализирован при импорте, эта функция для совместимости
+  console.log('[RELIABILITY] Reliability manager initialization requested')
 }
 
 /**
- * Принудительное закрытие документа
+ * Получение состояния надежности
  */
-async function forceCloseDocument(): Promise<void> {
+export function getReliabilityState(): {
+  totalTabs: number
+  readyTabs: number
+  problemTabs: number
+  healthCheckActive: boolean
+} {
+  const stats = reliabilityManager.getStats()
+  return {
+    ...stats,
+    healthCheckActive: true,
+  }
+}
+
+/**
+ * Выполнение диагностики системы
+ */
+export async function performDiagnostics(): Promise<{
+  documentExists: boolean
+  documentResponsive: boolean
+  tabsReady: number
+  tabsTotal: number
+  healthCheckActive: boolean
+  lastHealthCheck: number
+}> {
   try {
-    // Сначала проверяем, существует ли документ
-    const exists = await hasOffscreenDocument()
+    const stats = reliabilityManager.getStats()
 
-    if (!exists) {
-      console.log('[RELIABILITY] Document does not exist, skipping close')
-      return
+    // Пробуем проверить готовность случайного таба
+    const tabs = await browser.tabs.query({ active: true, currentWindow: true })
+    let documentResponsive = false
+
+    if (tabs.length > 0 && tabs[0].id) {
+      try {
+        documentResponsive = await reliabilityManager.ensureTabReady(tabs[0].id)
+      } catch (error) {
+        console.warn('[RELIABILITY] Diagnostic tab check failed:', error)
+      }
     }
 
-    console.log('[RELIABILITY] Force closing offscreen document')
-    await closeOffscreenDocument()
+    return {
+      documentExists: true,
+      documentResponsive,
+      tabsReady: stats.readyTabs,
+      tabsTotal: stats.totalTabs,
+      healthCheckActive: true,
+      lastHealthCheck: Date.now(),
+    }
   } catch (error) {
-    // Игнорируем ошибки при закрытии - возможно, документ уже закрыт
-    console.log('[RELIABILITY] Error closing document (may be already closed):', error)
-  }
-}
-
-/**
- * Проверка таймаута бездействия
- */
-function checkIdleTimeout(): void {
-  const now = Date.now()
-  const idleTime = now - reliabilityState.lastActivityAt
-
-  if (idleTime > RELIABILITY_CONFIG.DOCUMENT_IDLE_TIMEOUT) {
-    console.log(
-      `[RELIABILITY] Document idle for ${Math.round(idleTime / 1000)}s, closing to save resources`
-    )
-
-    // Закрываем документ для экономии ресурсов
-    forceCloseDocument().catch((error) => {
-      console.warn('[RELIABILITY] Error closing idle document:', error)
-    })
+    console.error('[RELIABILITY] Diagnostics failed:', error)
+    return {
+      documentExists: false,
+      documentResponsive: false,
+      tabsReady: 0,
+      tabsTotal: 0,
+      healthCheckActive: false,
+      lastHealthCheck: 0,
+    }
   }
 }
 
@@ -299,167 +467,16 @@ function checkIdleTimeout(): void {
  * Регистрация активности
  */
 export function registerActivity(): void {
-  reliabilityState.lastActivityAt = Date.now()
-  console.log('[RELIABILITY] Activity registered')
+  reliabilityManager.registerActivity()
 }
 
 /**
- * Получение состояния надёжности
+ * Выполнение операции с повторными попытками
  */
-export function getReliabilityState(): ReliabilityState & {
-  isRecovering: boolean
-  config: typeof RELIABILITY_CONFIG
-} {
-  return {
-    ...reliabilityState,
-    isRecovering,
-    config: { ...RELIABILITY_CONFIG },
-  }
-}
-
-/**
- * Принудительное восстановление (для отладки)
- */
-export async function forceRecovery(): Promise<void> {
-  console.log('[RELIABILITY] Force recovery requested')
-  await triggerRecovery()
-}
-
-/**
- * Сброс состояния надёжности
- */
-export function resetReliabilityState(): void {
-  reliabilityState = {
-    isHealthy: true,
-    lastHealthCheck: 0,
-    consecutiveErrors: 0,
-    totalRecoveries: 0,
-    lastRecoveryAt: 0,
-    lastActivityAt: Date.now(),
-    currentErrors: [],
-  }
-  console.log('[RELIABILITY] State reset')
-}
-
-/**
- * Безопасная обёртка для выполнения операций с offscreen-документом
- */
-export async function withReliability<T>(
+export function withReliability<T>(
   operation: () => Promise<T>,
-  maxRetries: number = 2
+  maxRetries: number = 3,
+  delay: number = 1000
 ): Promise<T> {
-  registerActivity()
-
-  for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
-    try {
-      // Проверяем здоровье документа перед операцией
-      if (!reliabilityState.isHealthy) {
-        console.warn('[RELIABILITY] Document not healthy, attempting recovery')
-        await triggerRecovery()
-      }
-
-      // Выполняем операцию
-      const result = await operation()
-
-      // Операция успешна
-      return result
-    } catch (error) {
-      console.error(`[RELIABILITY] Operation failed on attempt ${attempt}:`, error)
-
-      // Добавляем ошибку в статистику
-      addError(error instanceof Error ? error.message : String(error))
-
-      // Если это не последняя попытка, пробуем восстановить
-      if (attempt <= maxRetries) {
-        console.log(`[RELIABILITY] Attempting recovery before retry ${attempt + 1}`)
-        await triggerRecovery()
-        await delay(1000) // Небольшая задержка перед повтором
-      } else {
-        // Исчерпаны все попытки
-        throw new Error(
-          `Operation failed after ${maxRetries + 1} attempts: ${error instanceof Error ? error.message : String(error)}`
-        )
-      }
-    }
-  }
-
-  throw new Error('Unexpected end of withReliability function')
-}
-
-/**
- * Настройка обработчиков событий браузера
- */
-function setupBrowserEventHandlers(): void {
-  // Обработчик запуска браузера
-  if (browser.runtime.onStartup) {
-    browser.runtime.onStartup.addListener(() => {
-      console.log('[RELIABILITY] Browser startup detected, resetting state')
-      resetReliabilityState()
-    })
-  }
-
-  // Обработчик установки/обновления расширения
-  browser.runtime.onInstalled.addListener(() => {
-    console.log('[RELIABILITY] Extension installed/updated, resetting state')
-    resetReliabilityState()
-  })
-
-  console.log('[RELIABILITY] Browser event handlers set up')
-}
-
-/**
- * Диагностика состояния системы
- */
-export async function performDiagnostics(): Promise<{
-  documentExists: boolean
-  documentResponsive: boolean
-  reliabilityHealthy: boolean
-  consecutiveErrors: number
-  totalRecoveries: number
-  lastErrors: string[]
-  recommendations: string[]
-}> {
-  console.log('[RELIABILITY] Performing system diagnostics')
-
-  const documentExists = await hasOffscreenDocument()
-  const documentResponsive = documentExists ? await performPingWithTimeout() : false
-
-  const recommendations: string[] = []
-
-  if (!documentExists) {
-    recommendations.push('Document does not exist - will be created on next operation')
-  }
-
-  if (documentExists && !documentResponsive) {
-    recommendations.push('Document is not responsive - consider force recovery')
-  }
-
-  if (reliabilityState.consecutiveErrors > 0) {
-    recommendations.push(`${reliabilityState.consecutiveErrors} consecutive errors detected`)
-  }
-
-  if (reliabilityState.totalRecoveries > 5) {
-    recommendations.push('High number of recoveries - check for underlying issues')
-  }
-
-  if (recommendations.length === 0) {
-    recommendations.push('System appears to be functioning normally')
-  }
-
-  return {
-    documentExists,
-    documentResponsive,
-    reliabilityHealthy: reliabilityState.isHealthy,
-    consecutiveErrors: reliabilityState.consecutiveErrors,
-    totalRecoveries: reliabilityState.totalRecoveries,
-    lastErrors: [...reliabilityState.currentErrors],
-    recommendations,
-  }
-}
-
-/**
- * Вспомогательная функция для задержки
- */
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms))
+  return reliabilityManager.withReliability(operation, maxRetries, delay)
 }

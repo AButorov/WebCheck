@@ -465,7 +465,7 @@ function initElementPicker(): void {
   browser.runtime.onMessage.addListener((message: PickerMessage) => {
     console.log('[WebCheck] Received message:', message.action)
 
-    if (message.action === 'activateElementPicker') {
+    if (message.action === 'activateElementPicker' || message.action === 'activateElementSelection') {
       activatePicker()
       return Promise.resolve({ status: 'activated' })
     }

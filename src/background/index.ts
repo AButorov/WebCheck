@@ -15,10 +15,53 @@ import { initMonitor, checkDueTasksForUpdates, stopMonitor } from './monitor'
 // Импортируем менеджер offscreen-документов
 import { setupOffscreenEventHandlers } from './offscreenManager'
 
-// Обработка установки расширения
-browser.runtime.onInstalled.addListener(({ reason }) => {
+// Импортируем систему безопасных сообщений
+import { injectContentScriptsIntoAllTabs } from './safeMessaging'
+
+// Импортируем менеджер надежности
+import { reliabilityManager } from './reliabilityManager'
+
+// Обработка установки расширения - ИСПРАВЛЕННАЯ ВЕРСИЯ
+browser.runtime.onInstalled.addListener(async ({ reason }) => {
+  console.log(`[WebCheck:Background] Extension installed, reason: ${reason}`)
+
   if (reason === 'install') {
     console.log('Web Check extension installed')
+
+    // Инициализация базовых настроек
+    try {
+      const storage = await browser.storage.local.get(['tasks', 'settings'])
+      if (!storage.tasks) {
+        await browser.storage.local.set({ tasks: [] })
+      }
+      if (!storage.settings) {
+        await browser.storage.local.set({
+          settings: {
+            notifications: true,
+            checkInterval: 300000, // 5 минут по умолчанию
+            maxRetries: 3,
+          },
+        })
+      }
+      console.log('[WebCheck:Background] Initial storage setup completed')
+    } catch (error) {
+      console.error('[WebCheck:Background] Error setting up initial storage:', error)
+    }
+  }
+
+  // При установке или обновлении инжектируем content scripts
+  if (reason === 'install' || reason === 'update') {
+    console.log('[WebCheck:Background] Extension installed/updated, injecting content scripts...')
+
+    try {
+      // Ждем немного, чтобы система успела инициализироваться
+      await new Promise((resolve) => setTimeout(resolve, 1000))
+
+      await injectContentScriptsIntoAllTabs()
+      console.log('[WebCheck:Background] Content scripts injected into all suitable tabs')
+    } catch (error) {
+      console.error('[WebCheck:Background] Error injecting content scripts:', error)
+    }
   }
 })
 
@@ -36,6 +79,7 @@ if (browser.runtime.onSuspend) {
   browser.runtime.onSuspend.addListener(() => {
     console.log('Background script suspending, cleaning up resources')
     stopMonitor()
+    reliabilityManager.stopHealthChecks()
   })
 }
 
