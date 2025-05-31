@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Web Check</title>
+  <!-- Убраны inline-скрипты для совместимости с CSP -->
+  <style>
+    body, html {
+      width: 400px;
+      height: 500px;
+      margin: 0;
+      padding: 0;
+      overflow: auto;
+    }
+    #app {
+      min-height: 500px;
+      width: 100%;
+    }
+  </style>
+  <script type="module" crossorigin src="/src/ui/popup/index.js"></script>
+  <link rel="modulepreload" crossorigin href="/assets/js/browser-polyfill.js">
+  <link rel="modulepreload" crossorigin href="/assets/js/ru.js">
+  <link rel="stylesheet" crossorigin href="/assets/css/style.css">
+</head>
+<body>
+  <div id="app"></div>
+</body>
+</html>

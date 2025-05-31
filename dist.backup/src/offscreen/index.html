@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>WebCheck Offscreen Document</title>
+    <!-- CSP для Manifest V3 -->
+    <meta http-equiv="Content-Security-Policy" content="script-src 'self'; object-src 'self';" />
+    <script type="module" crossorigin src="/offscreen/index.js"></script>
+    <link rel="modulepreload" crossorigin href="/assets/js/browser-polyfill.js">
+    <link rel="stylesheet" crossorigin href="/assets/css/style.css">
+  </head>
+  <body>
+    <div id="offscreen-container" style="display: none">
+      <!-- Здесь будут создаваться iframe для проверки страниц -->
+    </div>
+
+    <!-- Подключение скрипта offscreen-документа -->
+  </body>
+</html>

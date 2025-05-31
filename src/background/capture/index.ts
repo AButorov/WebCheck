@@ -6,7 +6,6 @@ import browser from 'webextension-polyfill'
 import {
   sendSafeMessage,
   injectContentScriptsIntoAllTabs,
-  checkContentScriptReady,
 } from '../safeMessaging'
 
 interface ElementInfo {

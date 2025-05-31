@@ -9,10 +9,6 @@ import manifest from './src/manifest'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
-// Используем esbuild для минификации (более надёжно для ES модулей)
-const hasTerser = false
-
-// https://vitejs.dev/config/
 export default defineConfig({
   resolve: {
     alias: {
@@ -21,10 +17,8 @@ export default defineConfig({
   },
   plugins: [
     vue({
-      // Настройка Vue для работы без eval()
       template: {
         compilerOptions: {
-          // Настройки для CSP-совместимой сборки
           whitespace: 'condense',
           comments: false,
         },
@@ -32,7 +26,6 @@ export default defineConfig({
     }),
     crx({
       manifest,
-      // Настройки для правильной сборки content scripts
       contentScripts: {
         injectCss: true,
       },
@@ -61,7 +54,9 @@ export default defineConfig({
         options: resolve(__dirname, 'src/ui/options/index.html'),
         offscreen: resolve(__dirname, 'src/offscreen/index.html'),
       },
+      external: [], // Не исключаем зависимости
       output: {
+        // Исправляем проблему с именованием функций
         entryFileNames: (chunk) => {
           if (chunk.name === 'offscreen') {
             return 'offscreen/index.js'
@@ -70,7 +65,6 @@ export default defineConfig({
         },
         chunkFileNames: 'assets/js/[name].js',
         assetFileNames: (assetInfo) => {
-          // Проверяем offscreen HTML по содержимому
           if (assetInfo.name === 'index.html' && 
               typeof assetInfo.source === 'string' && 
               assetInfo.source.includes('offscreen-container')) {
@@ -81,28 +75,36 @@ export default defineConfig({
           }
           return 'assets/[ext]/[name][extname]'
         },
+        // Исправляем проблему с импортами
+        format: 'es',
+        // Добавляем обертку для правильного экспорта
+        intro: '// Chrome Extension Module Wrapper\n',
       },
     },
-    sourcemap: false, // Отключаем для продакшена
-    minify: hasTerser ? 'terser' : 'esbuild', // Используем terser, если доступен, иначе esbuild
-    // Настройки CSP совместимости
+    sourcemap: false,
+    minify: 'esbuild', // Используем только esbuild для стабильности
     cssCodeSplit: false,
     assetsInlineLimit: 0,
-    // Отключаем использование @charset в css
     cssTarget: ['chrome89', 'edge89', 'firefox89', 'safari15'],
+    // Исправление для ES modules
+    target: 'es2020',
   },
   define: {
-    // Настройки для Vue 3
     __VUE_OPTIONS_API__: true,
     __VUE_PROD_DEVTOOLS__: false,
-    // Строгий режим (отключаем eval)
     __VUE_PROD_HYDRATION_MISMATCH_DETAILS__: false,
-    // Режим компиляции
     'process.env.NODE_ENV': JSON.stringify('production'),
-    // Отключаем функции, которые используют eval()
     'process.env.VITE_CSP_COMPATIBLE': JSON.stringify('true'),
   },
   optimizeDeps: {
     include: ['vue', 'vue-router', 'vue-i18n', 'pinia', '@vueuse/core'],
+    // Принудительно включаем проблемные зависимости
+    force: true,
+  },
+  esbuild: {
+    // Настройки для правильной обработки импортов
+    format: 'esm',
+    target: 'es2020',
+    keepNames: true, // Сохраняем имена функций
   },
 })

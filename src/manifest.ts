@@ -10,9 +10,7 @@ export default defineManifest(async (env) => ({
   manifest_version: 3,
   name: env.mode === 'staging' ? `[INTERNAL] ${name}` : 'Web Check',
   description: description || 'Track changes on web pages with minimal effort',
-  // up to four numbers separated by dots
   version: `${major}.${minor}.${patch}.${label}`,
-  // semver is OK in "version_name"
   version_name: version,
   icons: {
     '16': 'icons/icon-16.png',
@@ -34,15 +32,13 @@ export default defineManifest(async (env) => ({
     service_worker: 'src/background/index.ts',
     type: 'module',
   },
-  // Используем content-script для проверки изменений и поддержки offscreen API
   content_scripts: [
     {
       matches: ['http://*/*', 'https://*/*'],
       js: ['src/content-script/index-legacy.js'],
-      all_frames: true, // Поддержка всех фреймов для offscreen API
+      all_frames: true,
     },
   ],
-  // CSP для MV3 - максимально строгая, без unsafe-eval
   content_security_policy: {
     extension_pages: "script-src 'self'; object-src 'self'; style-src 'self' 'unsafe-inline';",
   },

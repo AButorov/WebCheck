@@ -16,7 +16,10 @@
     "paths": {
       "~/*": ["src/*"]
     },
-    "types": ["vite/client", "vitest", "node", "webextension-polyfill"]
+    "types": ["vite/client", "vitest", "node", "webextension-polyfill"],
+    "allowSyntheticDefaultImports": true,
+    "noImplicitAny": false,
+    "noImplicitReturns": false
   },
   "include": ["src/**/*.ts", "src/**/*.d.ts", "src/**/*.tsx", "src/**/*.vue", "vue-shim.d.ts"],
   "references": [{ "path": "./tsconfig.node.json" }]
