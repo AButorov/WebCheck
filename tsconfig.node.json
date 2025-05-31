@@ -5,7 +5,9 @@
     "moduleResolution": "Node",
     "allowSyntheticDefaultImports": true,
     "resolveJsonModule": true,
-    "types": ["node"]
+    "skipLibCheck": true,
+    "typeRoots": [],
+    "types": []
   },
   "include": ["vite.config.ts", "src/manifest.ts"]
 }

@@ -5,16 +5,14 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite build --watch",
-    "build": "vite build && ./scripts/post-build.sh && ./final_check.sh",
-    "build:simple": "vite build",
-    "preview": "vite preview",
+    "dev": "node node_modules/vite/bin/vite.js build --watch",
+    "build": "node node_modules/vite/bin/vite.js build",
+    "build:clean": "./build.sh clean",
+    "preview": "node node_modules/vite/bin/vite.js preview",
     "lint": "eslint . --ext .vue,.js,.jsx,.cjs,.mjs,.ts,.tsx,.cts,.mts --fix --ignore-path .gitignore",
     "format": "prettier --write src/",
     "type-check": "vue-tsc --noEmit",
-    "test": "vitest",
-    "clean": "./clean_deps.sh",
-    "reinstall": "./reinstall_deps.sh"
+    "test": "vitest"
   },
   "dependencies": {
     "@vueuse/core": "10.7.2",

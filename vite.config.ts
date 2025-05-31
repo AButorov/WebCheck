@@ -54,9 +54,7 @@ export default defineConfig({
         options: resolve(__dirname, 'src/ui/options/index.html'),
         offscreen: resolve(__dirname, 'src/offscreen/index.html'),
       },
-      external: [], // Не исключаем зависимости
       output: {
-        // Исправляем проблему с именованием функций
         entryFileNames: (chunk) => {
           if (chunk.name === 'offscreen') {
             return 'offscreen/index.js'
@@ -75,18 +73,14 @@ export default defineConfig({
           }
           return 'assets/[ext]/[name][extname]'
         },
-        // Исправляем проблему с импортами
         format: 'es',
-        // Добавляем обертку для правильного экспорта
-        intro: '// Chrome Extension Module Wrapper\n',
       },
     },
     sourcemap: false,
-    minify: 'esbuild', // Используем только esbuild для стабильности
+    minify: 'esbuild',
     cssCodeSplit: false,
     assetsInlineLimit: 0,
     cssTarget: ['chrome89', 'edge89', 'firefox89', 'safari15'],
-    // Исправление для ES modules
     target: 'es2020',
   },
   define: {
@@ -98,13 +92,11 @@ export default defineConfig({
   },
   optimizeDeps: {
     include: ['vue', 'vue-router', 'vue-i18n', 'pinia', '@vueuse/core'],
-    // Принудительно включаем проблемные зависимости
     force: true,
   },
   esbuild: {
-    // Настройки для правильной обработки импортов
     format: 'esm',
     target: 'es2020',
-    keepNames: true, // Сохраняем имена функций
+    keepNames: true,
   },
 })
