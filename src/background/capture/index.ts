@@ -2,7 +2,7 @@
  * Background script для захвата элементов и создания скриншотов
  */
 
-import browser from 'webextension-polyfill'
+import * as browser from 'webextension-polyfill'
 import {
   sendSafeMessage,
   injectContentScriptsIntoAllTabs,

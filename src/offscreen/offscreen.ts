@@ -1,4 +1,4 @@
-import browser from 'webextension-polyfill'
+import * as browser from 'webextension-polyfill'
 
 /**
  * Offscreen Document для Web Check
@@ -49,7 +49,7 @@ function initializeIframeContainer(): void {
 /**
  * Обработчик сообщений от Service Worker
  */
-browser.runtime.onMessage.addListener((message: OffscreenMessage, sender: unknown, sendResponse: (response?: unknown) => void): true => {
+browser.runtime.onMessage.addListener((message: OffscreenMessage, _sender: unknown, sendResponse: (response?: unknown) => void): true => {
   console.log('[Offscreen] Получено сообщение:', message)
 
   // Проверяем, что сообщение предназначено для offscreen
@@ -62,18 +62,18 @@ browser.runtime.onMessage.addListener((message: OffscreenMessage, sender: unknow
     case 'EXTRACT_CONTENT':
       handleContentExtractionRequest(message)
         .then(content => {
-          sendResponse({ 
-            type: 'CONTENT_EXTRACTED', 
-            requestId: message.requestId, 
-            content 
+          sendResponse({
+            type: 'CONTENT_EXTRACTED',
+            requestId: message.requestId,
+            content
           })
         })
         .catch(error => {
           console.error('[Offscreen] Ошибка извлечения контента:', error)
-          sendResponse({ 
-            type: 'CONTENT_EXTRACTED', 
-            requestId: message.requestId, 
-            error: error.message 
+          sendResponse({
+            type: 'CONTENT_EXTRACTED',
+            requestId: message.requestId,
+            error: error.message
           })
         })
       break
@@ -108,17 +108,17 @@ async function handleContentExtractionRequest(message: OffscreenMessage): Promis
 
   // Создаем и настраиваем iframe
   const iframe = createIframe(message.url)
-  
+
   try {
     // Ждем загрузки страницы в iframe
     await waitForIframeLoad(iframe)
-    
+
     // Извлекаем контент
     const content = await extractContentFromIframe(iframe, message.selector, message.requestId)
-    
+
     console.log(`[Offscreen] Контент успешно извлечен (${content.length} символов)`)
     return content
-    
+
   } finally {
     // Всегда очищаем iframe
     cleanupIframe(iframe, message.requestId)
@@ -130,7 +130,7 @@ async function handleContentExtractionRequest(message: OffscreenMessage): Promis
  */
 function createIframe(url: string): HTMLIFrameElement {
   const iframe = document.createElement('iframe')
-  
+
   iframe.style.cssText = `
     position: absolute;
     left: -9999px;
@@ -140,15 +140,15 @@ function createIframe(url: string): HTMLIFrameElement {
     border: none;
     visibility: hidden;
   `
-  
+
   iframe.src = url
-  
+
   // Добавляем в контейнер
   if (!iframeContainer) {
     initializeIframeContainer()
   }
   iframeContainer.appendChild(iframe)
-  
+
   console.log(`[Offscreen] Iframe создан для ${url}`)
   return iframe
 }
@@ -191,9 +191,9 @@ function waitForIframeLoad(iframe: HTMLIFrameElement): Promise<void> {
  * Извлечение контента из iframe через postMessage
  */
 function extractContentViaPostMessage(
-  iframe: HTMLIFrameElement, 
-  selector: string, 
-  requestId: string, 
+  iframe: HTMLIFrameElement,
+  selector: string,
+  requestId: string,
   timeoutId: number,
   resolve: (content: string) => void,
   reject: (error: Error) => void
@@ -210,7 +210,7 @@ function extractContentViaPostMessage(
       console.log('[Offscreen] Получен контент через postMessage')
       clearTimeout(timeoutId)
       window.removeEventListener('message', messageHandler)
-      
+
       if (event.data.error) {
         reject(new Error(event.data.error))
       } else {
@@ -290,8 +290,8 @@ function extractContentFromIframe(iframe: HTMLIFrameElement, selector: string, r
  * Выполнение извлечения контента
  */
 function performContentExtraction(
-  document: Document, 
-  selector: string, 
+  document: Document,
+  selector: string,
   timeoutId: number,
   resolve: (content: string) => void,
   reject: (error: Error) => void
@@ -300,13 +300,13 @@ function performContentExtraction(
     console.log(`[Offscreen] Ищем элемент по селектору: ${selector}`)
 
     let element: Element | null = null
-    
+
     // Пробуем найти элемент разными способами
     try {
       element = document.querySelector(selector)
     } catch (selectorError) {
       console.warn('[Offscreen] Ошибка селектора, пробуем альтернативные методы:', selectorError)
-      
+
       // Пробуем по ID
       if (selector.startsWith('#')) {
         const id = selector.substring(1)
@@ -333,10 +333,10 @@ function performContentExtraction(
     }
 
     console.log('[Offscreen] Элемент найден, извлекаем контент')
-    
+
     // Извлекаем контент
     let content = element.outerHTML
-    
+
     // Проверяем размер контента
     if (content.length > OFFSCREEN_CONFIG.MAX_CONTENT_SIZE) {
       console.warn(`[Offscreen] Контент слишком большой (${content.length} символов), обрезаем`)
@@ -396,7 +396,7 @@ function setupPeriodicCleanup(): void {
     const now = Date.now()
     const requestsToCleanup: string[] = []
 
-    activeRequests.forEach((request, requestId) => {
+    activeRequests.forEach((_request, requestId) => {
       // Удаляем запросы старше 5 минут
       if (now - parseInt(requestId.split('_')[1] || '0') > 5 * 60 * 1000) {
         requestsToCleanup.push(requestId)

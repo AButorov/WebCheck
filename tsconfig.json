@@ -16,7 +16,7 @@
     "paths": {
       "~/*": ["src/*"]
     },
-    "types": ["webextension-polyfill"],
+    "types": [],
     "allowSyntheticDefaultImports": true,
     "noImplicitAny": false,
     "noImplicitReturns": false

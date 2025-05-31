@@ -3,7 +3,8 @@
  * Работает как с webext-bridge, так и с chrome.runtime.sendMessage
  * Использует менеджер надежности для обеспечения стабильной коммуникации
  */
-import browser from 'webextension-polyfill'
+import * as browser from 'webextension-polyfill'
+import { MessageSender } from 'webextension-polyfill'
 import { getMonitoringStats, getPerformanceStats } from './monitor'
 import { reliabilityManager } from './reliabilityManager'
 import { sendSafeMessage } from './safeMessaging'
@@ -34,7 +35,7 @@ export function setupUniversalMessageHandler(): void {
   browser.runtime.onMessage.addListener(
     (
       request: MessageRequest,
-      sender: browser.Runtime.MessageSender,
+      sender: MessageSender,
       sendResponse: (response: StatsResponse) => void
     ): true | void => {
       // Логируем все входящие сообщения для отладки
@@ -176,7 +177,7 @@ async function handleEnsureTabReady(
     console.log(`[UNIVERSAL HANDLER] Ensuring tab ${tabId} is ready...`)
     const isReady = await reliabilityManager.ensureTabReady(tabId)
     console.log(`[UNIVERSAL HANDLER] Tab ${tabId} readiness: ${isReady}`)
-    
+
     sendResponse({ success: true, data: { tabId, isReady } })
   } catch (error) {
     console.error('[UNIVERSAL HANDLER] Error ensuring tab ready:', error)
@@ -196,16 +197,16 @@ async function handleSafeSendMessage(
 ): Promise<void> {
   try {
     const { tabId, message, options } = request
-    
+
     if (typeof tabId !== 'number' || !message) {
       sendResponse({ success: false, error: 'Invalid parameters for safe send message' })
       return
     }
 
     console.log(`[UNIVERSAL HANDLER] Safe sending message to tab ${tabId}:`, message)
-    
+
     const result = await sendSafeMessage(tabId, message, options as any)
-    
+
     console.log(`[UNIVERSAL HANDLER] Safe send result:`, result)
     sendResponse({ success: result.success, data: result.data, error: result.error })
   } catch (error) {
@@ -225,9 +226,9 @@ async function handleForceReinjectAll(
 ): Promise<void> {
   try {
     console.log('[UNIVERSAL HANDLER] Force reinjecting content scripts into all tabs...')
-    
+
     await reliabilityManager.forceReinjectAll()
-    
+
     console.log('[UNIVERSAL HANDLER] Force reinject completed')
     sendResponse({ success: true, data: { message: 'Content scripts reinjected' } })
   } catch (error) {
@@ -244,12 +245,12 @@ async function handleForceReinjectAll(
  * Может использоваться другими модулями
  */
 export async function sendMessageToTab(
-  tabId: number, 
-  message: any, 
+  tabId: number,
+  message: any,
   options?: { ensureReady?: boolean; retryCount?: number }
 ): Promise<{ success: boolean; data?: any; error?: string }> {
   const { ensureReady = true, retryCount = 3 } = options || {}
-  
+
   try {
     // Проверяем готовность таба, если требуется
     if (ensureReady) {
@@ -258,10 +259,10 @@ export async function sendMessageToTab(
         return { success: false, error: 'Tab is not ready for messaging' }
       }
     }
-    
+
     // Отправляем сообщение через безопасную систему
     const result = await sendSafeMessage(tabId, message, { retryCount })
-    
+
     return result
   } catch (error) {
     return {
